@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ScenePack, Clip, SavedPack, Playlist, UserProfile } from '../types';
-import { INITIAL_SCENEPACKS, INITIAL_CLIPS } from '../data/initialData';
+import { supabase } from './supabase';
 
 interface AppContextType {
   currentUser: UserProfile | null;
@@ -11,6 +11,7 @@ interface AppContextType {
   setClips: React.Dispatch<React.SetStateAction<Clip[]>>;
   savedPacks: SavedPack[];
   playlists: Playlist[];
+  loading: boolean;
   toggleSavePack: (packId: string) => void;
   addPack: (pack: Omit<ScenePack, 'download_count' | 'view_count' | 'save_count' | 'rating' | 'created_at'>) => void;
   deletePack: (packId: string) => void;
@@ -30,16 +31,16 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Try loading from localStorage first, fallback to initial data
+  const [loading, setLoading] = useState(true);
+
+  // User stays in localStorage (no auth system yet)
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     const stored = localStorage.getItem('dala_user');
     if (stored) return JSON.parse(stored);
-    
-    // Default logged in user based on the current user metadata
     const defaultUser: UserProfile = {
       email: 'dalaaep10@gmail.com',
       full_name: 'Dala AEP',
-      role: 'admin', // Make them admin so they can test both Creator, Visitor, and Admin panels!
+      role: 'admin',
       avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop',
       joined_at: '2026-01-10T00:00:00Z',
       bio: 'Professional Tamil movie and Anime editor | After Effects maven | 4K 60FPS clip curator.'
@@ -48,87 +49,69 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return defaultUser;
   });
 
-  const [packs, setPacks] = useState<ScenePack[]>(() => {
-    const stored = localStorage.getItem('dala_packs');
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      // Auto-purge old simulated demo/sample rows
-      if (parsed.some((p: any) => p.id === 'pack-mangatha-ajith' || p.id === 'pack-leo-vijay' || p.id === 'pack-vikram-rolex')) {
-        localStorage.removeItem('dala_packs');
-        localStorage.removeItem('dala_clips');
-        localStorage.removeItem('dala_saved');
-        localStorage.removeItem('dala_playlists');
-        return [];
-      }
-      return parsed;
-    }
-    return INITIAL_SCENEPACKS;
-  });
+  const [packs, setPacks] = useState<ScenePack[]>([]);
+  const [clips, setClips] = useState<Clip[]>([]);
+  const [savedPacks, setSavedPacks] = useState<SavedPack[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
 
-  const [clips, setClips] = useState<Clip[]>(() => {
-    const stored = localStorage.getItem('dala_clips');
-    if (stored) return JSON.parse(stored);
-    return INITIAL_CLIPS;
-  });
-
-  const [savedPacks, setSavedPacks] = useState<SavedPack[]>(() => {
-    const stored = localStorage.getItem('dala_saved');
-    if (stored) return JSON.parse(stored);
-    return [];
-  });
-
-  const [playlists, setPlaylists] = useState<Playlist[]>(() => {
-    const stored = localStorage.getItem('dala_playlists');
-    if (stored) return JSON.parse(stored);
-    return [];
-  });
-
-  // Sync to localStorage on status changes
+  // Save user to localStorage when it changes
   useEffect(() => {
     localStorage.setItem('dala_user', JSON.stringify(currentUser));
   }, [currentUser]);
 
+  // Load all data from Supabase on startup
   useEffect(() => {
-    localStorage.setItem('dala_packs', JSON.stringify(packs));
-  }, [packs]);
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const [packsRes, clipsRes, savedRes, playlistsRes] = await Promise.all([
+          supabase.from('scene_packs').select('*').order('created_at', { ascending: false }),
+          supabase.from('clips').select('*').order('position', { ascending: true }),
+          supabase.from('saved_packs').select('*'),
+          supabase.from('playlists').select('*').order('created_at', { ascending: false }),
+        ]);
 
-  useEffect(() => {
-    localStorage.setItem('dala_clips', JSON.stringify(clips));
-  }, [clips]);
-
-  useEffect(() => {
-    localStorage.setItem('dala_saved', JSON.stringify(savedPacks));
-  }, [savedPacks]);
-
-  useEffect(() => {
-    localStorage.setItem('dala_playlists', JSON.stringify(playlists));
-  }, [playlists]);
-
-  const toggleSavePack = (packId: string) => {
-    if (!currentUser) return;
-    setSavedPacks(prev => {
-      const exists = prev.find(s => s.scenepack_id === packId && s.user_email === currentUser.email);
-      let updated: SavedPack[];
-      if (exists) {
-        updated = prev.filter(s => !(s.scenepack_id === packId && s.user_email === currentUser.email));
-        // decrement save_count
-        setPacks(p => p.map(pack => pack.id === packId ? { ...pack, save_count: Math.max(0, pack.save_count - 1) } : pack));
-      } else {
-        const newSave: SavedPack = {
-          id: `save-${Date.now()}`,
-          scenepack_id: packId,
-          user_email: currentUser.email,
-          saved_at: new Date().toISOString()
-        };
-        updated = [...prev, newSave];
-        // increment save_count
-        setPacks(p => p.map(pack => pack.id === packId ? { ...pack, save_count: pack.save_count + 1 } : pack));
+        if (packsRes.data) setPacks(packsRes.data as ScenePack[]);
+        if (clipsRes.data) setClips(clipsRes.data as Clip[]);
+        if (savedRes.data) setSavedPacks(savedRes.data as SavedPack[]);
+        if (playlistsRes.data) setPlaylists(playlistsRes.data as Playlist[]);
+      } catch (err) {
+        console.error('Failed to load data from Supabase:', err);
+      } finally {
+        setLoading(false);
       }
-      return updated;
-    });
+    };
+
+    loadData();
+  }, []);
+
+  const toggleSavePack = async (packId: string) => {
+    if (!currentUser) return;
+    const exists = savedPacks.find(s => s.scenepack_id === packId && s.user_email === currentUser.email);
+
+    if (exists) {
+      // Remove save
+      await supabase.from('saved_packs').delete().eq('id', exists.id);
+      setSavedPacks(prev => prev.filter(s => s.id !== exists.id));
+      await supabase.from('scene_packs').update({ save_count: Math.max(0, (packs.find(p => p.id === packId)?.save_count || 1) - 1) }).eq('id', packId);
+      setPacks(prev => prev.map(p => p.id === packId ? { ...p, save_count: Math.max(0, p.save_count - 1) } : p));
+    } else {
+      // Add save
+      const newSave: SavedPack = {
+        id: `save-${Date.now()}`,
+        scenepack_id: packId,
+        user_email: currentUser.email,
+        saved_at: new Date().toISOString()
+      };
+      await supabase.from('saved_packs').insert(newSave);
+      setSavedPacks(prev => [...prev, newSave]);
+      const newCount = (packs.find(p => p.id === packId)?.save_count || 0) + 1;
+      await supabase.from('scene_packs').update({ save_count: newCount }).eq('id', packId);
+      setPacks(prev => prev.map(p => p.id === packId ? { ...p, save_count: p.save_count + 1 } : p));
+    }
   };
 
-  const addPack = (newPackData: Omit<ScenePack, 'download_count' | 'view_count' | 'save_count' | 'rating' | 'created_at'>) => {
+  const addPack = async (newPackData: Omit<ScenePack, 'download_count' | 'view_count' | 'save_count' | 'rating' | 'created_at'>) => {
     const fullNewPack: ScenePack = {
       ...newPackData,
       download_count: 0,
@@ -137,11 +120,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       rating: 5.0,
       created_at: new Date().toISOString()
     };
-    setPacks(prev => [fullNewPack, ...prev]);
+    const { error } = await supabase.from('scene_packs').insert(fullNewPack);
+    if (!error) {
+      setPacks(prev => [fullNewPack, ...prev]);
+    } else {
+      console.error('Failed to add pack:', error);
+    }
   };
 
-  const deletePack = (packId: string) => {
-    // Cascading Pack Deletion: "Clips belonging to a pack are cascade deleted when the pack is deleted."
+  const deletePack = async (packId: string) => {
+    await supabase.from('scene_packs').delete().eq('id', packId);
     setPacks(prev => prev.filter(p => p.id !== packId));
     setClips(prev => prev.filter(c => c.scenepack_id !== packId));
     setSavedPacks(prev => prev.filter(s => s.scenepack_id !== packId));
@@ -151,19 +139,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     })));
   };
 
-  const addClip = (newClipData: Omit<Clip, 'id'>) => {
+  const addClip = async (newClipData: Omit<Clip, 'id'>) => {
     const newClip: Clip = {
       ...newClipData,
       id: `clip-${Date.now()}-${Math.floor(Math.random() * 1000)}`
     };
-    setClips(prev => [...prev, newClip]);
+    const { error } = await supabase.from('clips').insert(newClip);
+    if (!error) {
+      setClips(prev => [...prev, newClip]);
+    } else {
+      console.error('Failed to add clip:', error);
+    }
   };
 
-  const incrementViewCount = (packId: string) => {
+  const incrementViewCount = async (packId: string) => {
+    const pack = packs.find(p => p.id === packId);
+    if (!pack) return;
+    await supabase.from('scene_packs').update({ view_count: pack.view_count + 1 }).eq('id', packId);
     setPacks(prev => prev.map(p => p.id === packId ? { ...p, view_count: p.view_count + 1 } : p));
   };
 
-  const incrementDownloadCount = (packId: string) => {
+  const incrementDownloadCount = async (packId: string) => {
+    const pack = packs.find(p => p.id === packId);
+    if (!pack) return;
+    await supabase.from('scene_packs').update({ download_count: pack.download_count + 1 }).eq('id', packId);
     setPacks(prev => prev.map(p => p.id === packId ? { ...p, download_count: p.download_count + 1 } : p));
   };
 
@@ -179,34 +178,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       is_public: isPublic,
       created_at: new Date().toISOString()
     };
+    supabase.from('playlists').insert(newPlaylist);
     setPlaylists(prev => [...prev, newPlaylist]);
     return id;
   };
 
-  const addPackToPlaylist = (playlistId: string, packId: string) => {
-    setPlaylists(prev => prev.map(p => {
-      if (p.id === playlistId) {
-        if (p.pack_ids.includes(packId)) return p;
-        return { ...p, pack_ids: [...p.pack_ids, packId] };
-      }
-      return p;
-    }));
+  const addPackToPlaylist = async (playlistId: string, packId: string) => {
+    const playlist = playlists.find(p => p.id === playlistId);
+    if (!playlist || playlist.pack_ids.includes(packId)) return;
+    const updated = [...playlist.pack_ids, packId];
+    await supabase.from('playlists').update({ pack_ids: updated }).eq('id', playlistId);
+    setPlaylists(prev => prev.map(p => p.id === playlistId ? { ...p, pack_ids: updated } : p));
   };
 
-  const removePackFromPlaylist = (playlistId: string, packId: string) => {
-    setPlaylists(prev => prev.map(p => {
-      if (p.id === playlistId) {
-        return { ...p, pack_ids: p.pack_ids.filter(id => id !== packId) };
-      }
-      return p;
-    }));
+  const removePackFromPlaylist = async (playlistId: string, packId: string) => {
+    const playlist = playlists.find(p => p.id === playlistId);
+    if (!playlist) return;
+    const updated = playlist.pack_ids.filter(id => id !== packId);
+    await supabase.from('playlists').update({ pack_ids: updated }).eq('id', playlistId);
+    setPlaylists(prev => prev.map(p => p.id === playlistId ? { ...p, pack_ids: updated } : p));
   };
 
-  const deletePlaylist = (playlistId: string) => {
+  const deletePlaylist = async (playlistId: string) => {
+    await supabase.from('playlists').delete().eq('id', playlistId);
     setPlaylists(prev => prev.filter(p => p.id !== playlistId));
   };
 
-  const updatePackStatus = (packId: string, status: ScenePack['status']) => {
+  const updatePackStatus = async (packId: string, status: ScenePack['status']) => {
+    await supabase.from('scene_packs').update({ status }).eq('id', packId);
     setPacks(prev => prev.map(p => p.id === packId ? { ...p, status } : p));
   };
 
@@ -215,26 +214,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(prev => prev ? { ...prev, role } : null);
   };
 
-  const clearDatabase = () => {
+  const clearDatabase = async () => {
+    await supabase.from('clips').delete().neq('id', '');
+    await supabase.from('saved_packs').delete().neq('id', '');
+    await supabase.from('playlists').delete().neq('id', '');
+    await supabase.from('scene_packs').delete().neq('id', '');
     setPacks([]);
     setClips([]);
     setSavedPacks([]);
     setPlaylists([]);
-    localStorage.removeItem('dala_packs');
-    localStorage.removeItem('dala_clips');
-    localStorage.removeItem('dala_saved');
-    localStorage.removeItem('dala_playlists');
   };
 
-  const restoreInitialData = () => {
-    setPacks([]);
-    setClips([]);
-    setSavedPacks([]);
-    setPlaylists([]);
-    localStorage.removeItem('dala_packs');
-    localStorage.removeItem('dala_clips');
-    localStorage.removeItem('dala_saved');
-    localStorage.removeItem('dala_playlists');
+  const restoreInitialData = async () => {
+    await clearDatabase();
   };
 
   return (
@@ -247,6 +239,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setClips,
       savedPacks,
       playlists,
+      loading,
       toggleSavePack,
       addPack,
       deletePack,
