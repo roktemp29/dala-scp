@@ -1,0 +1,6 @@
+{
+  "name": "DALA.AEP SCP",
+  "description": "Tamil Movie & Anime Scenepack Platform - Browse, stream, download, and share curated movie scene collections (scenepacks) for video editors.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
