@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppProvider } from './lib/AppContext';
+import { useApp } from './lib/AppContext';
 import { Navbar } from './components/layout/Navbar';
 import { Home } from './pages/Home';
 import { Browse } from './pages/Browse';
@@ -9,18 +10,34 @@ import { Upload } from './pages/Upload';
 import { Profile } from './pages/Profile';
 import { Dashboard } from './pages/Dashboard';
 import { Admin } from './pages/Admin';
-
-import { ShieldCheck, HelpCircle } from 'lucide-react';
+import { LoginPage } from './pages/LoginPage';
+import { ShieldCheck } from 'lucide-react';
 
 function BaseLayout() {
+  const { currentUser, loading, signOut } = useApp();
   const [activeTab, setActiveTab] = useState<string>('home');
   const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
   const [streamingPackId, setStreamingPackId] = useState<string | null>(null);
   const [viewProfileEmail, setViewProfileEmail] = useState<string | null>(null);
-
-  // Synchronized search queries across pages
   const [browseGenre, setBrowseGenre] = useState<string>('All');
   const [browseSearch, setBrowseSearch] = useState<string>('');
+
+  // Show loading spinner while checking auth
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-zinc-500 text-xs font-mono tracking-widest uppercase">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login page if not signed in
+  if (!currentUser) {
+    return <LoginPage />;
+  }
 
   const navigateToGenre = (genreName: string) => {
     setBrowseGenre(genreName);
@@ -43,85 +60,60 @@ function BaseLayout() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-[#E5E5E5] font-sans flex flex-col justify-between selection:bg-red-600 selection:text-white">
-      {/* Dynamic Sticky Navigation Bar */}
-      <Navbar 
-        activeTab={activeTab} 
+      <Navbar
+        activeTab={activeTab}
         setActiveTab={(tab) => {
           setActiveTab(tab);
-          // Auto clean specific looking views when jumping tabs
           setSelectedPackId(null);
-          if (tab !== 'profile') {
-            setViewProfileEmail(null);
-          }
-        }} 
+          if (tab !== 'profile') setViewProfileEmail(null);
+        }}
         onViewProfileEmail={handleOpenProfile}
+        onSignOut={signOut}
       />
 
-      {/* Main Page Canvas area */}
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 lg:px-8 py-6 mb-8 relative">
-        
-        {/* Render Details View Overlay or specific Tab pages */}
         {selectedPackId ? (
-          <PackDetail 
-            packId={selectedPackId} 
-            onBack={() => setSelectedPackId(null)} 
+          <PackDetail
+            packId={selectedPackId}
+            onBack={() => setSelectedPackId(null)}
             onStreamClick={(id) => setStreamingPackId(id)}
             onViewProfileEmail={handleOpenProfile}
           />
         ) : (
           <>
             {activeTab === 'home' && (
-              <Home 
-                onPackClick={handleOpenPack} 
+              <Home
+                onPackClick={handleOpenPack}
                 onStreamClick={(id) => setStreamingPackId(id)}
                 onTabChange={setActiveTab}
               />
             )}
-
             {activeTab === 'browse' && (
-              <Browse 
-                onPackClick={handleOpenPack} 
+              <Browse
+                onPackClick={handleOpenPack}
                 defaultGenre={browseGenre}
                 defaultSearch={browseSearch}
               />
             )}
-
             {activeTab === 'upload' && (
-              <Upload 
-                onSuccess={(id) => {
-                  setSelectedPackId(id);
-                  setActiveTab('browse');
-                }}
-              />
+              <Upload onSuccess={(id) => { setSelectedPackId(id); setActiveTab('browse'); }} />
             )}
-
             {activeTab === 'profile' && (
-              <Profile 
-                viewEmail={viewProfileEmail || undefined} 
-                onPackClick={handleOpenPack}
-              />
+              <Profile viewEmail={viewProfileEmail || undefined} onPackClick={handleOpenPack} />
             )}
-
-            {activeTab === 'dashboard' && (
-              <Dashboard />
-            )}
-
-            {activeTab === 'admin' && (
+            {activeTab === 'dashboard' && <Dashboard />}
+            {/* Admin tab only visible to admins */}
+            {activeTab === 'admin' && currentUser.role === 'admin' && (
               <Admin onPackClick={handleOpenPack} />
             )}
           </>
         )}
       </main>
 
-      {/* Standalone cinematic Player covering entire viewport */}
       {streamingPackId && (
-        <Player 
-          packId={streamingPackId} 
-          onClose={() => setStreamingPackId(null)} 
-        />
+        <Player packId={streamingPackId} onClose={() => setStreamingPackId(null)} />
       )}
 
-      {/* Statistics Bar and System Status (Elegant Dark Design Specs) */}
       <div className="w-full max-w-7xl mx-auto px-4 lg:px-8 border-t border-white/5 py-5 flex flex-col md:flex-row items-center justify-between text-[10px] uppercase tracking-[0.2em] font-extrabold text-zinc-400 gap-4">
         <div className="flex flex-wrap justify-center gap-6 md:gap-8 text-center md:text-left">
           <span className="hover:text-zinc-200 transition-colors">2,841 Active Editors</span>
@@ -134,7 +126,6 @@ function BaseLayout() {
         </div>
       </div>
 
-      {/* Footer System Credits and disclaimer */}
       <footer className="py-6 border-t border-white/5 bg-[#08080a] text-center text-[10px] font-mono text-zinc-400 space-y-1">
         <div className="flex justify-center items-center gap-1.5 leading-none">
           <ShieldCheck className="w-3.5 h-3.5 text-zinc-500" />

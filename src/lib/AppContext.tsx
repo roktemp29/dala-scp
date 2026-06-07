@@ -26,77 +26,123 @@ interface AppContextType {
   switchUserRole: (role: 'admin' | 'user') => void;
   clearDatabase: () => void;
   restoreInitialData: () => void;
+  signOut: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [loading, setLoading] = useState(true);
-
-  // User stays in localStorage (no auth system yet)
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
-    const stored = localStorage.getItem('dala_user');
-    if (stored) return JSON.parse(stored);
-    const defaultUser: UserProfile = {
-      email: 'dalaaep10@gmail.com',
-      full_name: 'Dala AEP',
-      role: 'admin',
-      avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop',
-      joined_at: '2026-01-10T00:00:00Z',
-      bio: 'Professional Tamil movie and Anime editor | After Effects maven | 4K 60FPS clip curator.'
-    };
-    localStorage.setItem('dala_user', JSON.stringify(defaultUser));
-    return defaultUser;
-  });
-
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [packs, setPacks] = useState<ScenePack[]>([]);
   const [clips, setClips] = useState<Clip[]>([]);
   const [savedPacks, setSavedPacks] = useState<SavedPack[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
 
-  // Save user to localStorage when it changes
+  // Listen to Supabase Auth state
   useEffect(() => {
-    localStorage.setItem('dala_user', JSON.stringify(currentUser));
-  }, [currentUser]);
-
-  // Load all data from Supabase on startup
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const [packsRes, clipsRes, savedRes, playlistsRes] = await Promise.all([
-          supabase.from('scene_packs').select('*').order('created_at', { ascending: false }),
-          supabase.from('clips').select('*').order('position', { ascending: true }),
-          supabase.from('saved_packs').select('*'),
-          supabase.from('playlists').select('*').order('created_at', { ascending: false }),
-        ]);
-
-        if (packsRes.data) setPacks(packsRes.data as ScenePack[]);
-        if (clipsRes.data) setClips(clipsRes.data as Clip[]);
-        if (savedRes.data) setSavedPacks(savedRes.data as SavedPack[]);
-        if (playlistsRes.data) setPlaylists(playlistsRes.data as Playlist[]);
-      } catch (err) {
-        console.error('Failed to load data from Supabase:', err);
-      } finally {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        loadOrCreateProfile(session.user);
+      } else {
         setLoading(false);
       }
-    };
+    });
 
-    loadData();
+    // Listen for auth changes (login/logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        loadOrCreateProfile(session.user);
+      } else {
+        setCurrentUser(null);
+        setPacks([]);
+        setClips([]);
+        setSavedPacks([]);
+        setPlaylists([]);
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  const loadOrCreateProfile = async (authUser: any) => {
+    // Check if profile exists
+    let { data: profile } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('id', authUser.id)
+      .single();
+
+    if (!profile) {
+      // Create profile for first time users
+      const newProfile = {
+        id: authUser.id,
+        email: authUser.email,
+        full_name: authUser.user_metadata?.full_name || authUser.email,
+        avatar_url: authUser.user_metadata?.avatar_url || '',
+        role: 'user',
+        bio: '',
+        joined_at: new Date().toISOString()
+      };
+      const { data } = await supabase.from('user_profiles').insert(newProfile).select().single();
+      profile = data;
+    }
+
+    if (profile) {
+      setCurrentUser({
+        email: profile.email,
+        full_name: profile.full_name,
+        role: profile.role,
+        avatar_url: profile.avatar_url,
+        joined_at: profile.joined_at,
+        bio: profile.bio
+      });
+    }
+
+    // Load all data
+    await loadData(authUser.email, profile?.role || 'user');
+  };
+
+  const loadData = async (userEmail: string, role: string) => {
+    setLoading(true);
+    try {
+      const [packsRes, clipsRes, savedRes, playlistsRes] = await Promise.all([
+        supabase.from('scene_packs').select('*').order('created_at', { ascending: false }),
+        supabase.from('clips').select('*').order('position', { ascending: true }),
+        // Only load THIS user's saved packs
+        supabase.from('saved_packs').select('*').eq('user_email', userEmail),
+        // Only load THIS user's playlists
+        supabase.from('playlists').select('*').eq('owner_email', userEmail).order('created_at', { ascending: false }),
+      ]);
+
+      if (packsRes.data) setPacks(packsRes.data as ScenePack[]);
+      if (clipsRes.data) setClips(clipsRes.data as Clip[]);
+      if (savedRes.data) setSavedPacks(savedRes.data as SavedPack[]);
+      if (playlistsRes.data) setPlaylists(playlistsRes.data as Playlist[]);
+    } catch (err) {
+      console.error('Failed to load data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
 
   const toggleSavePack = async (packId: string) => {
     if (!currentUser) return;
     const exists = savedPacks.find(s => s.scenepack_id === packId && s.user_email === currentUser.email);
 
     if (exists) {
-      // Remove save
       await supabase.from('saved_packs').delete().eq('id', exists.id);
       setSavedPacks(prev => prev.filter(s => s.id !== exists.id));
-      await supabase.from('scene_packs').update({ save_count: Math.max(0, (packs.find(p => p.id === packId)?.save_count || 1) - 1) }).eq('id', packId);
-      setPacks(prev => prev.map(p => p.id === packId ? { ...p, save_count: Math.max(0, p.save_count - 1) } : p));
+      const newCount = Math.max(0, (packs.find(p => p.id === packId)?.save_count || 1) - 1);
+      await supabase.from('scene_packs').update({ save_count: newCount }).eq('id', packId);
+      setPacks(prev => prev.map(p => p.id === packId ? { ...p, save_count: newCount } : p));
     } else {
-      // Add save
       const newSave: SavedPack = {
         id: `save-${Date.now()}`,
         scenepack_id: packId,
@@ -107,7 +153,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSavedPacks(prev => [...prev, newSave]);
       const newCount = (packs.find(p => p.id === packId)?.save_count || 0) + 1;
       await supabase.from('scene_packs').update({ save_count: newCount }).eq('id', packId);
-      setPacks(prev => prev.map(p => p.id === packId ? { ...p, save_count: p.save_count + 1 } : p));
+      setPacks(prev => prev.map(p => p.id === packId ? { ...p, save_count: newCount } : p));
     }
   };
 
@@ -121,11 +167,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       created_at: new Date().toISOString()
     };
     const { error } = await supabase.from('scene_packs').insert(fullNewPack);
-    if (!error) {
-      setPacks(prev => [fullNewPack, ...prev]);
-    } else {
-      console.error('Failed to add pack:', error);
-    }
+    if (!error) setPacks(prev => [fullNewPack, ...prev]);
+    else console.error('Failed to add pack:', error);
   };
 
   const deletePack = async (packId: string) => {
@@ -145,11 +188,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `clip-${Date.now()}-${Math.floor(Math.random() * 1000)}`
     };
     const { error } = await supabase.from('clips').insert(newClip);
-    if (!error) {
-      setClips(prev => [...prev, newClip]);
-    } else {
-      console.error('Failed to add clip:', error);
-    }
+    if (!error) setClips(prev => [...prev, newClip]);
+    else console.error('Failed to add clip:', error);
   };
 
   const incrementViewCount = async (packId: string) => {
@@ -170,9 +210,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!currentUser) return '';
     const id = `play-${Date.now()}`;
     const newPlaylist: Playlist = {
-      id,
-      name,
-      description,
+      id, name, description,
       owner_email: currentUser.email,
       pack_ids: [],
       is_public: isPublic,
@@ -219,41 +257,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await supabase.from('saved_packs').delete().neq('id', '');
     await supabase.from('playlists').delete().neq('id', '');
     await supabase.from('scene_packs').delete().neq('id', '');
-    setPacks([]);
-    setClips([]);
-    setSavedPacks([]);
-    setPlaylists([]);
+    setPacks([]); setClips([]); setSavedPacks([]); setPlaylists([]);
   };
 
-  const restoreInitialData = async () => {
-    await clearDatabase();
-  };
+  const restoreInitialData = async () => { await clearDatabase(); };
 
   return (
     <AppContext.Provider value={{
-      currentUser,
-      setCurrentUser,
-      packs,
-      setPacks,
-      clips,
-      setClips,
-      savedPacks,
-      playlists,
-      loading,
-      toggleSavePack,
-      addPack,
-      deletePack,
-      addClip,
-      incrementViewCount,
-      incrementDownloadCount,
-      createPlaylist,
-      addPackToPlaylist,
-      removePackFromPlaylist,
-      deletePlaylist,
-      updatePackStatus,
-      switchUserRole,
-      clearDatabase,
-      restoreInitialData
+      currentUser, setCurrentUser,
+      packs, setPacks,
+      clips, setClips,
+      savedPacks, playlists, loading,
+      toggleSavePack, addPack, deletePack, addClip,
+      incrementViewCount, incrementDownloadCount,
+      createPlaylist, addPackToPlaylist, removePackFromPlaylist,
+      deletePlaylist, updatePackStatus, switchUserRole,
+      clearDatabase, restoreInitialData, signOut
     }}>
       {children}
     </AppContext.Provider>
@@ -262,8 +281,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
 export const useApp = () => {
   const context = useContext(AppContext);
-  if (context === undefined) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
+  if (context === undefined) throw new Error('useApp must be used within an AppProvider');
   return context;
 };

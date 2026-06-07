@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Eye, Download, Bookmark, Film, ListCollapse } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Eye, Download, Bookmark, Film, ListCollapse, Volume2, VolumeX } from 'lucide-react';
 import { ScenePack } from '../../types';
 import { useApp } from '../../lib/AppContext';
 
@@ -14,8 +14,8 @@ export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
 
   const [isHovered, setIsHovered] = useState(false);
   const [shouldPlay, setShouldPlay] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
 
-  // Parse color variables safely
   const gradFrom = pack.gradient_from || '#1e3c72';
   const gradTo = pack.gradient_to || '#2a5298';
 
@@ -23,7 +23,6 @@ export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
     '--hover-glow': `linear-gradient(135deg, ${gradFrom}df, ${gradTo}df)`
   } as React.CSSProperties;
 
-  // Extract YouTube ID safely
   const getYoutubeId = (url: string) => {
     if (!url) return null;
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
@@ -31,22 +30,25 @@ export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
     return (match && match[2].length === 11) ? match[2] : null;
   };
 
-  const youtubeId = getYoutubeId(pack.preview_url);
+  const youtubeId = getYoutubeId(pack.trailer_url || pack.preview_url);
 
-  // Trigger video stream after hovering for 150ms (debounced and fast)
   useEffect(() => {
     if (!isHovered) {
       setShouldPlay(false);
+      setIsMuted(true); // reset mute on mouse leave
       return;
     }
-    const timer = setTimeout(() => {
-      setShouldPlay(true);
-    }, 150);
+    const timer = setTimeout(() => setShouldPlay(true), 150);
     return () => clearTimeout(timer);
   }, [isHovered]);
 
+  // Build iframe src based on mute state
+  const iframeSrc = youtubeId
+    ? `https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=${youtubeId}&playsinline=1&showinfo=0&rel=0&iv_load_policy=3&enablejsapi=1`
+    : '';
+
   return (
-    <div 
+    <div
       style={cardStyle}
       onClick={onClick}
       onMouseEnter={() => setIsHovered(true)}
@@ -55,45 +57,59 @@ export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
       id={`pack-card-${pack.id}`}
     >
       {/* Glow Backing Overlay */}
-      <div 
+      <div
         className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-500 pointer-events-none blur-3xl rounded-xl"
-        style={{
-          background: `linear-gradient(135deg, ${gradFrom}, ${gradTo})`
-        }}
+        style={{ background: `linear-gradient(135deg, ${gradFrom}, ${gradTo})` }}
       ></div>
 
       {/* Main Image Aspect Container */}
       <div className="relative aspect-[3/4] w-full overflow-hidden bg-zinc-900 border-b border-white/5">
-        <img 
-          src={pack.thumbnail_url} 
+        <img
+          src={pack.thumbnail_url}
           alt={pack.title}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           loading="lazy"
           referrerPolicy="no-referrer"
         />
 
-        {/* Hover Trailer Autoplayer (Netflix-style stream) */}
+        {/* Hover Trailer Autoplayer */}
         {shouldPlay && (
-          <div className="absolute inset-0 bg-[#0A0A0A] z-20 pointer-events-none animate-in fade-in duration-300 overflow-hidden">
+          <div className="absolute inset-0 bg-[#0A0A0A] z-20 animate-in fade-in duration-300 overflow-hidden">
             {youtubeId ? (
-              <iframe 
-                src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${youtubeId}&playsinline=1&showinfo=0&rel=0&iv_load_policy=3&enablejsapi=1`}
-                className="absolute inset-0 w-[148%] h-[148%] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 object-cover pointer-events-none scale-105 z-20"
+              // Key changes when isMuted changes — forces iframe to reload with new mute param
+              <iframe
+                key={`${youtubeId}-${isMuted}`}
+                src={iframeSrc}
+                className="absolute inset-0 w-[148%] h-[148%] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none scale-105 z-20"
                 allow="autoplay; encrypted-media"
                 title={pack.title}
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <video 
+              <video
                 src={pack.preview_url || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4'}
                 autoPlay
                 loop
-                muted
+                muted={isMuted}
                 playsInline
                 className="absolute inset-0 w-full h-full object-cover z-20 pointer-events-none"
               />
             )}
-            
+
+            {/* Mute Toggle Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsMuted(prev => !prev);
+              }}
+              className="absolute bottom-2.5 left-2 z-40 p-1.5 rounded-lg bg-black/70 border border-white/20 text-white hover:bg-black/90 transition-all duration-200 pointer-events-auto"
+            >
+              {isMuted
+                ? <VolumeX className="w-3.5 h-3.5" />
+                : <Volume2 className="w-3.5 h-3.5 text-green-400" />
+              }
+            </button>
+
             {/* Live stream pill */}
             <div className="absolute bottom-2.5 right-2 text-zinc-100 font-mono text-[8px] bg-red-600/90 font-black px-1.5 py-0.5 rounded tracking-widest uppercase z-30 pointer-events-none shadow-md shadow-black/40">
               TRAILER PREVIEW
@@ -104,30 +120,25 @@ export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
         {/* Gradient Shadow Shroud */}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
 
-        {/* Custom Solid Palette Stripe indicating Brand Colors */}
-        <div 
+        {/* Brand Color Stripe */}
+        <div
           className="absolute top-0 inset-x-0 h-1"
-          style={{
-            background: `linear-gradient(90deg, ${gradFrom}, ${gradTo})`
-          }}
+          style={{ background: `linear-gradient(90deg, ${gradFrom}, ${gradTo})` }}
         ></div>
 
         {/* Floating Top Indicators */}
         <div className="absolute top-2.5 inset-x-2.5 flex items-center justify-between pointer-events-auto">
-          {/* Genre Badge */}
           <span className="text-[10px] font-bold tracking-wider uppercase text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded border border-white/10">
             {pack.genre}
           </span>
-          
-          {/* Bookmark Button */}
           <button
             onClick={(e) => {
               e.stopPropagation();
               toggleSavePack(pack.id);
             }}
             className={`p-1.5 rounded-lg border backdrop-blur-md transition-all duration-300 ${
-              isSaved 
-                ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/20 scale-105' 
+              isSaved
+                ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/20 scale-105'
                 : 'bg-black/60 border-white/10 hover:border-white/25 text-zinc-400 hover:text-white hover:scale-105'
             }`}
           >
@@ -147,7 +158,7 @@ export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
           </div>
         </div>
 
-        {/* Quick Spec Badge Overlays inside container */}
+        {/* Quick Spec Badge */}
         <div className="absolute top-[38%] left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col items-center gap-2 pointer-events-none">
           <span className="bg-red-600/90 text-white font-extrabold text-[10px] tracking-widest uppercase px-3 py-1 rounded-full shadow-lg scale-90 group-hover:scale-100 transition-transform duration-300">
             VIEW PACK
@@ -155,19 +166,17 @@ export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
         </div>
       </div>
 
-      {/* Description / Metadata Content */}
+      {/* Description / Metadata */}
       <div className="p-3.5 flex-1 flex flex-col justify-between">
         <div>
           <div className="text-[10px] font-mono text-zinc-500 tracking-wider flex items-center gap-1 uppercase truncate mb-1">
             <Film className="w-3 h-3 text-red-500 shrink-0" />
             <span>{pack.anime_source}</span>
           </div>
-          
           <h3 className="font-bold text-sm text-zinc-100 group-hover:text-white tracking-tight line-clamp-2 leading-tight transition-colors">
             {pack.title}
           </h3>
         </div>
-
         <div className="mt-3.5 pt-2 py-0.5 border-t border-white/5 flex items-center justify-between text-[10px] font-mono text-zinc-400">
           <span className="flex items-center gap-1 font-bold">
             <ListCollapse className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
