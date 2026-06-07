@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppProvider } from './lib/AppContext';
 import { useApp } from './lib/AppContext';
 import { Navbar } from './components/layout/Navbar';
@@ -12,6 +12,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Admin } from './pages/Admin';
 import { LoginPage } from './pages/LoginPage';
 import { ShieldCheck } from 'lucide-react';
+import { supabase } from './lib/supabase';
 
 function BaseLayout() {
   const { currentUser, loading, signOut } = useApp();
@@ -21,6 +22,20 @@ function BaseLayout() {
   const [viewProfileEmail, setViewProfileEmail] = useState<string | null>(null);
   const [browseGenre, setBrowseGenre] = useState<string>('All');
   const [browseSearch, setBrowseSearch] = useState<string>('');
+  const [footerStats, setFooterStats] = useState({ packs: 0, users: 0 });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      const { count: packCount } = await supabase
+        .from('scene_packs')
+        .select('*', { count: 'exact', head: true });
+      const { count: userCount } = await supabase
+        .from('user_profiles')
+        .select('*', { count: 'exact', head: true });
+      setFooterStats({ packs: packCount || 0, users: userCount || 0 });
+    };
+    fetchStats();
+  }, []);
 
   // Show loading spinner while checking auth
   if (loading) {
@@ -116,9 +131,8 @@ function BaseLayout() {
 
       <div className="w-full max-w-7xl mx-auto px-4 lg:px-8 border-t border-white/5 py-5 flex flex-col md:flex-row items-center justify-between text-[10px] uppercase tracking-[0.2em] font-extrabold text-zinc-400 gap-4">
         <div className="flex flex-wrap justify-center gap-6 md:gap-8 text-center md:text-left">
-          <span className="hover:text-zinc-200 transition-colors">2,841 Active Editors</span>
-          <span className="hover:text-zinc-200 transition-colors">14,092 Scenepacks</span>
-          <span className="hover:text-zinc-200 transition-colors">942.8 TB Served</span>
+          <span className="hover:text-zinc-200 transition-colors">{footerStats.users} Active Editors</span>
+          <span className="hover:text-zinc-200 transition-colors">{footerStats.packs} Scenepacks</span>
         </div>
         <div className="flex gap-2.5 items-center bg-zinc-950/40 px-3 py-1 rounded-full border border-white/5">
           <span className="text-[#E5E5E5] text-[9px] font-sans">System Status: Optimal</span>

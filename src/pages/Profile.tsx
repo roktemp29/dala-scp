@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../lib/AppContext';
 import { PackCard } from '../components/packs/PackCard';
+import { supabase } from '../lib/supabase';
 
 interface ProfileProps {
   viewEmail?: string; // Optional public email profile lookup
@@ -14,7 +15,7 @@ interface ProfileProps {
 export const Profile: React.FC<ProfileProps> = ({ viewEmail, onPackClick }) => {
   const { 
     currentUser, setCurrentUser, packs, savedPacks, playlists, 
-    createPlaylist, deletePlaylist, removePackFromPlaylist,
+    createPlaylist, deletePlaylist, removePackFromPlaylist, deletePack,
     clearDatabase, restoreInitialData
   } = useApp();
 
@@ -30,6 +31,7 @@ export const Profile: React.FC<ProfileProps> = ({ viewEmail, onPackClick }) => {
   const [profileName, setProfileName] = useState(currentUser?.full_name || '');
   const [profileBio, setProfileBio] = useState(currentUser?.bio || '');
   const [profileAvatar, setProfileAvatar] = useState(currentUser?.avatar_url || '');
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   // Playlist popup creator state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -190,8 +192,34 @@ export const Profile: React.FC<ProfileProps> = ({ viewEmail, onPackClick }) => {
                       <span className="bg-zinc-700 text-white text-[9px] font-mono font-bold tracking-wider px-2 py-0.5 rounded shadow">
                         DRAFT
                       </span>
+                    ) : pack.status === 'published' ? (
+                      <span className="bg-green-700 text-white text-[9px] font-mono font-bold tracking-wider px-2 py-0.5 rounded shadow">
+                        PUBLISHED
+                      </span>
                     ) : null}
                   </div>
+
+                  {/* Delete button — only for draft/in_review/pending statuses */}
+                  {pack.status && ['draft', 'in_review', 'pending'].includes(pack.status) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm(`Delete "${pack.title}"? This cannot be undone.`)) {
+                          deletePack(pack.id);
+                        }
+                      }}
+                      className="absolute bottom-14 right-2 z-30 opacity-0 group-hover/uploads:opacity-100 transition-opacity duration-200 bg-red-600 hover:bg-red-500 text-white text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded shadow-lg"
+                    >
+                      Delete
+                    </button>
+                  )}
+
+                  {/* Lock icon for published packs — no delete allowed */}
+                  {pack.status === 'published' && (
+                    <div className="absolute bottom-14 right-2 z-30 opacity-0 group-hover/uploads:opacity-100 transition-opacity duration-200 bg-zinc-800 text-zinc-400 text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded shadow-lg flex items-center gap-1">
+                      🔒 Approved
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -389,7 +417,7 @@ export const Profile: React.FC<ProfileProps> = ({ viewEmail, onPackClick }) => {
       {showEditProfileModal && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/85 backdrop-blur-md px-4">
           <form 
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               if (!currentUser) return;
               const updated = {
@@ -399,7 +427,12 @@ export const Profile: React.FC<ProfileProps> = ({ viewEmail, onPackClick }) => {
                 avatar_url: profileAvatar
               };
               setCurrentUser(updated);
-              localStorage.setItem('dala_user', JSON.stringify(updated));
+              // Save to Supabase too
+              await supabase.from('user_profiles').update({
+                full_name: profileName,
+                bio: profileBio,
+                avatar_url: profileAvatar
+              }).eq('email', currentUser.email);
               setShowEditProfileModal(false);
             }}
             className="w-full max-w-md bg-[#0e0e0f] border border-white/5 rounded-2xl p-6 space-y-4 select-none shadow-2xl animate-in zoom-in duration-150 text-left"
@@ -417,17 +450,45 @@ export const Profile: React.FC<ProfileProps> = ({ viewEmail, onPackClick }) => {
               </button>
             </div>
 
-            <div className="space-y-1 flex flex-col">
-              <label className="text-[10px] font-mono text-zinc-400 font-bold uppercase tracking-wider">CREATOR OR PAGE LOGO URL *</label>
-              <input
-                type="url"
-                required
-                placeholder="Paste your custom uploaded logo banner/emblem URL..."
-                value={profileAvatar}
-                onChange={(e) => setProfileAvatar(e.target.value)}
-                className="w-full px-3 py-2.5 bg-[#0a0a0c] text-xs text-white placeholder-zinc-700 rounded-lg border border-white/5 outline-none focus:border-red-500 transition"
-              />
-              <span className="text-[9px] font-mono text-zinc-500 mt-0.5">Use any direct image link. This becomes the primary brand asset on the top Navbar.</span>
+            {/* Profile image upload section */}
+            <div className="space-y-2 flex flex-col">
+              <label className="text-[10px] font-mono text-zinc-400 font-bold uppercase tracking-wider">PROFILE IMAGE</label>
+              
+              {/* Preview */}
+              {profileAvatar && (
+                <img src={profileAvatar} alt="Preview" className="w-16 h-16 rounded-xl object-cover border border-white/10" />
+              )}
+
+              {/* Upload button */}
+              <label className={`flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-lg border border-dashed border-white/20 hover:border-red-500/50 bg-[#0a0a0c] cursor-pointer transition ${avatarUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                <input
+                  type="file"
+                  accept="image/jpg,image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 5 * 1024 * 1024) {
+                      alert('Image must be under 5MB');
+                      return;
+                    }
+                    setAvatarUploading(true);
+                    const ext = file.name.split('.').pop();
+                    const path = `avatars/${currentUser?.email}-${Date.now()}.${ext}`;
+                    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+                    if (error) {
+                      alert('Upload failed: ' + error.message);
+                    } else {
+                      const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+                      setProfileAvatar(data.publicUrl);
+                    }
+                    setAvatarUploading(false);
+                  }}
+                />
+                <span className="text-xs text-zinc-400">
+                  {avatarUploading ? 'Uploading...' : '📁 Choose Image (JPG, PNG, WEBP · max 5MB)'}
+                </span>
+              </label>
             </div>
 
             <div className="space-y-1 flex flex-col">

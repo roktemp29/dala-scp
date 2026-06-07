@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FileVideo, Sliders, Palette, UploadCloud, Plus, Trash2, 
   Sparkles, CheckCircle2, ArrowRight, ArrowLeft, Lightbulb, 
@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../lib/AppContext';
 import { ScenePack, Clip } from '../types';
+import { supabase } from '../lib/supabase';
 
 interface UploadProps {
   onSuccess: (packId: string) => void;
@@ -50,6 +51,68 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
 
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [thumbnailUploading, setThumbnailUploading] = useState(false);
+  const [bannerUploading, setBannerUploading] = useState(false);
+
+  // Auto-save draft to localStorage
+  useEffect(() => {
+    const draft = {
+      title,
+      movieSource,
+      genre,
+      year,
+      resolution,
+      fps,
+      previewUrl,
+      description,
+      tagsInput,
+      thumbnailUrl,
+      bannerUrl,
+      gradientFrom,
+      gradientTo,
+      fileSize,
+      downloadLink,
+      clipsCount: clipsList.length
+    };
+    localStorage.setItem('dala_upload_draft', JSON.stringify(draft));
+  }, [title, movieSource, genre, year, resolution, fps, previewUrl, description, tagsInput, thumbnailUrl, bannerUrl, gradientFrom, gradientTo, fileSize, downloadLink, clipsList.length]);
+
+  // Restore draft on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('dala_upload_draft');
+    if (!saved) return;
+    try {
+      const d = JSON.parse(saved);
+      if (d.title) setTitle(d.title);
+      if (d.movieSource) setMovieSource(d.movieSource);
+      if (d.genre) setGenre(d.genre);
+      if (d.year) setYear(d.year);
+      if (d.resolution) setResolution(d.resolution);
+      if (d.fps) setFps(d.fps);
+      if (d.previewUrl) setPreviewUrl(d.previewUrl);
+      if (d.description) setDescription(d.description);
+      if (d.tagsInput) setTagsInput(d.tagsInput);
+      if (d.thumbnailUrl) setThumbnailUrl(d.thumbnailUrl);
+      if (d.bannerUrl) setBannerUrl(d.bannerUrl);
+      if (d.gradientFrom) setGradientFrom(d.gradientFrom);
+      if (d.gradientTo) setGradientTo(d.gradientTo);
+      if (d.fileSize) setFileSize(d.fileSize);
+      if (d.downloadLink) setDownloadLink(d.downloadLink);
+      // Note: clipsList is not restored because it contains file objects; user must re-upload clips
+    } catch (e) { console.warn('Failed to restore draft', e); }
+  }, []);
+
+  // Warn before leaving if there is unsaved data
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (title || description || movieSource || clipsList.length > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [title, description, movieSource, clipsList.length]);
 
   // Preset thumbnails for easy clicking
   const THUMBNAIL_PRESETS = [
@@ -81,9 +144,8 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
     const lines = clipInputText.split('\n').filter(line => line.trim() !== '');
     
     const newClips = lines.map((line, idx) => {
-      // Basic text clean or splitting duration if formatted like "Spit fight (12s)"
       let name = line.trim();
-      let duration = 12; // default
+      let duration = 12;
       
       const durationMatch = line.match(/\((\d+)s\)/);
       if (durationMatch) {
@@ -97,7 +159,7 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
         resolution: String(resolution),
         has_raw: true,
         has_graded: false,
-        sample_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4' // default beautiful fallback
+        sample_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4'
       };
     });
 
@@ -117,7 +179,6 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
       const clipId = `file-${Date.now()}-${index}`;
       setUploadProgress(prev => ({ ...prev, [clipId]: 0 }));
 
-      // Simulate a premium dashboard uploading state
       let progress = 0;
       const interval = setInterval(() => {
         progress += Math.floor(Math.random() * 15) + 10;
@@ -125,14 +186,13 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
           progress = 100;
           clearInterval(interval);
           
-          // Generate a real client-side readable blob URL, making it functional in HTML5 streaming!
           const videoUrlBlob = URL.createObjectURL(file);
           
           setClipsList(prev => [
             ...prev,
             {
               name: file.name.replace(/\.[^/.]+$/, "").replace(/_/g, ' '),
-              duration: 15, // estimated duration
+              duration: 15,
               resolution: String(resolution),
               has_raw: true,
               has_graded: false,
@@ -141,7 +201,6 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
             }
           ]);
 
-          // Clean upload statuses
           setTimeout(() => {
             setUploadProgress(prev => {
               const cp = { ...prev };
@@ -168,7 +227,6 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
     const packId = `pack-${Date.now()}`;
     const tags = tagsInput.split(',').map(t => t.trim()).filter(t => t !== '');
 
-    // Default status: standard creators publish to "in_review", admins publish instantly!
     const publishStatus: ScenePack['status'] = currentUser?.role === 'admin' ? 'published' : 'in_review';
 
     addPack({
@@ -197,7 +255,6 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
       uploader_email: currentUser?.email || 'guest@scenepack.com'
     });
 
-    // Add multiple clip child records
     clipsList.forEach((c, idx) => {
       addClip({
         scenepack_id: packId,
@@ -211,11 +268,21 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
       });
     });
 
+    // Clear draft on successful publish
+    localStorage.removeItem('dala_upload_draft');
     onSuccess(packId);
   };
 
   return (
     <div className="max-w-4xl mx-auto py-4 text-left">
+      {/* Draft indicator */}
+      {localStorage.getItem('dala_upload_draft') && (
+        <div className="flex items-center gap-1.5 text-emerald-400 text-[10px] font-mono uppercase tracking-widest mb-3">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Draft Auto-Saved
+        </div>
+      )}
+
       {/* Step Progress Tracker Layout */}
       <div className="flex items-center justify-between border-b border-white/5 pb-5 mb-8 text-xs font-mono">
         {[
@@ -409,18 +476,44 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
               STEP 2.1 — COVER POSTER IMAGES
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Thumbnail field with upload and preview */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-mono text-zinc-500">THUMBNAIL POSTER PATH URL (2:3 aspect)</label>
-                <input
-                  type="url"
-                  value={thumbnailUrl}
-                  onChange={(e) => setThumbnailUrl(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-[#0a0a0c] text-xs text-white placeholder-zinc-600 rounded-xl border border-white/5 outline-none focus:border-red-500 transition"
-                />
+                <label className="text-[10px] font-mono text-zinc-500">THUMBNAIL POSTER (2:3 aspect)</label>
                 
+                {/* Preview */}
+                {thumbnailUrl && (
+                  <img src={thumbnailUrl} alt="Thumbnail Preview" className="w-20 h-28 rounded-lg object-cover border border-white/10" referrerPolicy="no-referrer" />
+                )}
+
+                <label className={`flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl border border-dashed border-white/20 hover:border-red-500/50 bg-[#0a0a0c] cursor-pointer transition ${thumbnailUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <input
+                    type="file"
+                    accept="image/jpg,image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 10 * 1024 * 1024) { alert('Image must be under 10MB'); return; }
+                      setThumbnailUploading(true);
+                      const ext = file.name.split('.').pop();
+                      const path = `thumbnails/${Date.now()}.${ext}`;
+                      const { error } = await supabase.storage.from('pack-images').upload(path, file, { upsert: true });
+                      if (error) { alert('Upload failed: ' + error.message); }
+                      else {
+                        const { data } = supabase.storage.from('pack-images').getPublicUrl(path);
+                        setThumbnailUrl(data.publicUrl);
+                      }
+                      setThumbnailUploading(false);
+                    }}
+                  />
+                  <span className="text-xs text-zinc-400">
+                    {thumbnailUploading ? '⏳ Uploading...' : '📁 Upload Thumbnail (JPG, PNG, WEBP · max 10MB)'}
+                  </span>
+                </label>
+
                 {/* Preset Row */}
-                <div className="flex gap-2.5 mt-1.5">
-                  {THUMBNAIL_PRESETS.map((p, idx) => (
+                <div className="flex gap-2.5 mt-1">
+                  {THUMBNAIL_PRESETS.map((p) => (
                     <img
                       key={p}
                       onClick={() => setThumbnailUrl(p)}
@@ -435,15 +528,41 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
                 </div>
               </div>
 
+              {/* Banner field with upload and preview */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-mono text-zinc-500">WIDESCREEN DETAIL BANNER PATH URL</label>
-                <input
-                  type="url"
-                  value={bannerUrl}
-                  onChange={(e) => setBannerUrl(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-[#0a0a0c] text-xs text-white placeholder-zinc-600 rounded-xl border border-white/5 outline-none focus:border-red-500 transition"
-                />
-                <span className="text-[9px] font-mono text-zinc-500">Default generic banner presets are assigned from Unsplash vectors if left empty.</span>
+                <label className="text-[10px] font-mono text-zinc-500">WIDESCREEN DETAIL BANNER</label>
+
+                {/* Preview */}
+                {bannerUrl && (
+                  <img src={bannerUrl} alt="Banner Preview" className="w-full h-20 rounded-lg object-cover border border-white/10" referrerPolicy="no-referrer" />
+                )}
+
+                <label className={`flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl border border-dashed border-white/20 hover:border-red-500/50 bg-[#0a0a0c] cursor-pointer transition ${bannerUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <input
+                    type="file"
+                    accept="image/jpg,image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 10 * 1024 * 1024) { alert('Image must be under 10MB'); return; }
+                      setBannerUploading(true);
+                      const ext = file.name.split('.').pop();
+                      const path = `banners/${Date.now()}.${ext}`;
+                      const { error } = await supabase.storage.from('pack-images').upload(path, file, { upsert: true });
+                      if (error) { alert('Upload failed: ' + error.message); }
+                      else {
+                        const { data } = supabase.storage.from('pack-images').getPublicUrl(path);
+                        setBannerUrl(data.publicUrl);
+                      }
+                      setBannerUploading(false);
+                    }}
+                  />
+                  <span className="text-xs text-zinc-400">
+                    {bannerUploading ? '⏳ Uploading...' : '📁 Upload Banner (JPG, PNG, WEBP · max 10MB)'}
+                  </span>
+                </label>
+                <span className="text-[9px] font-mono text-zinc-500">Wide banner shown on the pack detail page. Leave empty for auto-generated banner.</span>
               </div>
             </div>
           </div>
@@ -719,7 +838,7 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
             <div className="bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-xl p-4 flex items-start gap-2 text-xs">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold">Caution:</span> You have not configured any individual clip extracts for previews. Standard users can still download your full mega-pack file, but won\'t be able to preview or stream individual cuts in their browser.
+                <span className="font-bold">Caution:</span> You have not configured any individual clip extracts for previews. Standard users can still download your full mega-pack file, but won't be able to preview or stream individual cuts in their browser.
               </div>
             </div>
           )}

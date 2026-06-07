@@ -168,7 +168,11 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onViewP
           <div className="flex items-center justify-between px-4 py-3 bg-zinc-950 mt-2 rounded-lg border border-white/5">
             <div className="flex items-center gap-3">
               {currentUser?.avatar_url ? (
-                <img src={currentUser.avatar_url} alt={currentUser.full_name} className="w-8 h-8 rounded-lg object-cover" referrerPolicy="no-referrer" />
+                <img 
+                    src="https://isbvtqzecysxqwzyfceb.supabase.co/storage/v1/object/public/assets/logo.png" 
+                    alt="DALA.AEP Logo" 
+                    className="w-full h-full object-cover rounded-xl" 
+                />
               ) : (
                 <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-white font-bold">
                   {currentUser?.full_name?.[0] || '?'}
