@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Film, Upload, Grid, User, Layout, Menu, X, Check, LogOut } from 'lucide-react';
+import { Shield, Film, Upload, Grid, User, Layout, Menu, X, LogOut } from 'lucide-react';
 import { useApp } from '../../lib/AppContext';
 
 interface NavbarProps {
@@ -22,7 +22,6 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onViewP
     { id: 'profile', label: 'My Library', icon: User },
   ];
 
-  // Only show admin panel to real admins
   if (currentUser?.role === 'admin') {
     menuItems.push({ id: 'admin', label: 'Admin Panel', icon: Shield });
   }
@@ -35,28 +34,30 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onViewP
   return (
     <nav className="sticky top-0 z-50 bg-[#0A0A0A]/95 backdrop-blur-xl border-b border-white/5 px-6 lg:px-10 py-5 transition-all duration-300">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
-        {/* Logo */}
+
+        {/* LEFT — Site Logo (always fixed, never user avatar) */}
         <div
           onClick={() => handleNavClick('home')}
           className="flex items-center gap-3 cursor-pointer select-none group"
         >
-          <div className="relative w-9 h-9 rounded-xl bg-red-600/10 border border-red-500/30 flex items-center justify-center font-bold overflow-hidden shadow-lg shadow-red-600/10 group-hover:border-red-500/60 transition-all duration-300 shrink-0">
-            {currentUser?.avatar_url ? (
-              <img src={currentUser.avatar_url} alt="Avatar" className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" />
-            ) : (
-              <span className="text-red-500 font-extrabold text-sm">D</span>
-            )}
-            <div className="absolute inset-0 bg-gradient-to-t from-red-600/20 via-transparent to-transparent pointer-events-none"></div>
+          <div className="relative w-9 h-9 rounded-xl bg-red-600/10 border border-red-500/30 overflow-hidden shadow-lg shadow-red-600/10 group-hover:border-red-500/60 transition-all duration-300 shrink-0">
+            <img
+              src="https://isbvtqzecysxqwzyfceb.supabase.co/storage/v1/object/public/assets/logo.png"
+              alt="DALA.AEP Logo"
+              className="w-full h-full object-cover rounded-xl"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-red-600/20 via-transparent to-transparent pointer-events-none" />
           </div>
           <div className="flex flex-col">
             <span className="font-extrabold text-base tracking-wider text-white leading-none group-hover:text-red-500 transition-colors flex items-center">
-              DALA.AEP <span className="text-red-500 font-extrabold text-[8px] uppercase tracking-wider bg-red-500/10 border border-red-500/25 px-1.5 py-0.5 rounded-md ml-1.5">SCP</span>
+              DALA.AEP
+              <span className="text-red-500 font-extrabold text-[8px] uppercase tracking-wider bg-red-500/10 border border-red-500/25 px-1.5 py-0.5 rounded-md ml-1.5">SCP</span>
             </span>
-            <span className="text-[8px] text-zinc-400 font-mono tracking-widest leading-none mt-1 uppercase font-bold">SCENEPACK CENTER</span>
+            <span className="text-[8px] text-zinc-400 font-mono tracking-widest leading-none mt-1 uppercase font-bold">Scenepack Hub</span>
           </div>
         </div>
 
-        {/* Desktop Nav */}
+        {/* CENTER — Desktop Nav */}
         <div className="hidden md:flex items-center gap-7">
           {menuItems.map((item) => {
             const isActive = activeTab === item.id;
@@ -76,9 +77,8 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onViewP
           })}
         </div>
 
-        {/* User Profile + Sign Out */}
+        {/* RIGHT — User profile (always user's Google avatar) */}
         <div className="hidden md:flex items-center gap-4">
-          {/* Role badge — only shown to admins */}
           {currentUser?.role === 'admin' && (
             <span className="bg-red-600/10 border border-red-500/30 text-red-400 text-[9px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
@@ -86,15 +86,19 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onViewP
             </span>
           )}
 
-          {/* Profile card */}
           <div className="relative">
             <div
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center gap-3 pl-4 border-l border-white/10 cursor-pointer hover:opacity-85 transition"
             >
-              <div className="w-9 h-9 rounded-md bg-gradient-to-br from-orange-500 to-red-600 p-0.5 overflow-hidden">
+              <div className="w-9 h-9 rounded-md bg-gradient-to-br from-orange-500 to-red-600 p-0.5 overflow-hidden shrink-0">
                 {currentUser?.avatar_url ? (
-                  <img src={currentUser.avatar_url} alt={currentUser.full_name} className="w-full h-full rounded-[4px] object-cover" referrerPolicy="no-referrer" />
+                  <img
+                    src={currentUser.avatar_url}
+                    alt={currentUser.full_name}
+                    className="w-full h-full rounded-[4px] object-cover"
+                    referrerPolicy="no-referrer"
+                  />
                 ) : (
                   <div className="w-full h-full rounded-[4px] bg-zinc-800 flex items-center justify-center text-white font-bold text-sm">
                     {currentUser?.full_name?.[0] || '?'}
@@ -107,7 +111,6 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onViewP
               </div>
             </div>
 
-            {/* Dropdown menu */}
             {showUserMenu && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowUserMenu(false)} />
@@ -168,10 +171,11 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, onViewP
           <div className="flex items-center justify-between px-4 py-3 bg-zinc-950 mt-2 rounded-lg border border-white/5">
             <div className="flex items-center gap-3">
               {currentUser?.avatar_url ? (
-                <img 
-                    src="https://isbvtqzecysxqwzyfceb.supabase.co/storage/v1/object/public/assets/logo.png" 
-                    alt="DALA.AEP Logo" 
-                    className="w-full h-full object-cover rounded-xl" 
+                <img
+                  src={currentUser.avatar_url}
+                  alt={currentUser.full_name}
+                  className="w-8 h-8 rounded-lg object-cover"
+                  referrerPolicy="no-referrer"
                 />
               ) : (
                 <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-white font-bold">

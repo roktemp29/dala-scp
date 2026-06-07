@@ -8,6 +8,15 @@ import { useApp } from '../lib/AppContext';
 import { ScenePack, Clip } from '../types';
 import { supabase } from '../lib/supabase';
 
+// Helper to get draft value
+const getDraft = (key: string, fallback: any) => {
+  try {
+    const saved = localStorage.getItem('dala_upload_draft');
+    if (saved) return JSON.parse(saved)[key] ?? fallback;
+  } catch {}
+  return fallback;
+};
+
 interface UploadProps {
   onSuccess: (packId: string) => void;
 }
@@ -18,24 +27,26 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
   // Wizard active step (1 to 4)
   const [step, setStep] = useState(1);
 
-  // Form Field States
-  const [title, setTitle] = useState('');
-  const [movieSource, setMovieSource] = useState('');
-  const [genre, setGenre] = useState<ScenePack['genre']>('Mass');
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [resolution, setResolution] = useState<ScenePack['resolution']>('1080p');
-  const [fps, setFps] = useState(60);
-  const [downloadLink, setDownloadLink] = useState('');
-  const [previewUrl, setPreviewUrl] = useState('');
-  const [description, setDescription] = useState('');
-  const [tagsInput, setTagsInput] = useState('');
-  const [fileSize, setFileSize] = useState('1.2 GB');
+  // Form Field States – now lazy‑initialised from localStorage draft
+  const [title, setTitle] = useState(() => getDraft('title', ''));
+  const [animeSource, setAnimeSource] = useState(() => getDraft('animeSource', ''));
+  const [genre, setGenre] = useState<ScenePack['genre']>(() => getDraft('genre', 'Action'));
+  const [year, setYear] = useState(() => getDraft('year', 2024));
+  const [resolution, setResolution] = useState<ScenePack['resolution']>(() => getDraft('resolution', '4K'));
+  const [fps, setFps] = useState(() => getDraft('fps', 60));
+  const [clipCount, setClipCount] = useState(() => getDraft('clipCount', 0));          // added as requested
+  const [description, setDescription] = useState(() => getDraft('description', ''));
+  const [tags, setTags] = useState(() => getDraft('tags', []));                        // changed from tagsInput to array
+  const [gradientFrom, setGradientFrom] = useState(() => getDraft('gradientFrom', '#1e3c72'));
+  const [gradientTo, setGradientTo] = useState(() => getDraft('gradientTo', '#2a5298'));
+  const [thumbnailUrl, setThumbnailUrl] = useState(() => getDraft('thumbnailUrl', 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=600'));
+  const [bannerUrl, setBannerUrl] = useState(() => getDraft('bannerUrl', 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=1200'));
+  const [previewUrl, setPreviewUrl] = useState(() => getDraft('previewUrl', ''));
 
-  // Step 2 Core Art Profiles
-  const [thumbnailUrl, setThumbnailUrl] = useState('https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=600');
-  const [bannerUrl, setBannerUrl] = useState('https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=1200');
-  const [gradientFrom, setGradientFrom] = useState('#800000');
-  const [gradientTo, setGradientTo] = useState('#111111');
+  // Additional states that were not listed – kept as before
+  const [downloadLink, setDownloadLink] = useState('');
+  const [tagsInput, setTagsInput] = useState('');      // kept for backward compatibility with UI
+  const [fileSize, setFileSize] = useState('1.2 GB');
 
   // Step 3 Clip Segment States
   const [clipInputText, setClipInputText] = useState('');
@@ -45,7 +56,7 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
     resolution: string;
     has_raw: boolean;
     has_graded: boolean;
-    sample_url: string; // Blob or mock URL
+    sample_url: string;
     file_object?: File;
   }>>([]);
 
@@ -54,65 +65,69 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
   const [thumbnailUploading, setThumbnailUploading] = useState(false);
   const [bannerUploading, setBannerUploading] = useState(false);
 
-  // Auto-save draft to localStorage
+  // Auto-save draft to localStorage – now includes the new keys
   useEffect(() => {
     const draft = {
       title,
-      movieSource,
+      animeSource,
       genre,
       year,
       resolution,
       fps,
-      previewUrl,
+      clipCount: clipsList.length,
       description,
-      tagsInput,
-      thumbnailUrl,
-      bannerUrl,
+      tags,
       gradientFrom,
       gradientTo,
+      thumbnailUrl,
+      bannerUrl,
+      previewUrl,
+      // keep existing fields that are not in the lazy‑initialised list
+      movieSource: animeSource,   // for backward compatibility
+      tagsInput,
       fileSize,
       downloadLink,
-      clipsCount: clipsList.length
     };
     localStorage.setItem('dala_upload_draft', JSON.stringify(draft));
-  }, [title, movieSource, genre, year, resolution, fps, previewUrl, description, tagsInput, thumbnailUrl, bannerUrl, gradientFrom, gradientTo, fileSize, downloadLink, clipsList.length]);
+  }, [title, animeSource, genre, year, resolution, fps, description, tags, gradientFrom, gradientTo, thumbnailUrl, bannerUrl, previewUrl, clipsList.length, tagsInput, fileSize, downloadLink]);
 
-  // Restore draft on mount
+  // Restore draft on mount – now only for fields that were not lazy‑initialised, but kept for safety
   useEffect(() => {
     const saved = localStorage.getItem('dala_upload_draft');
     if (!saved) return;
     try {
       const d = JSON.parse(saved);
       if (d.title) setTitle(d.title);
-      if (d.movieSource) setMovieSource(d.movieSource);
+      if (d.animeSource) setAnimeSource(d.animeSource);
       if (d.genre) setGenre(d.genre);
       if (d.year) setYear(d.year);
       if (d.resolution) setResolution(d.resolution);
       if (d.fps) setFps(d.fps);
-      if (d.previewUrl) setPreviewUrl(d.previewUrl);
       if (d.description) setDescription(d.description);
-      if (d.tagsInput) setTagsInput(d.tagsInput);
-      if (d.thumbnailUrl) setThumbnailUrl(d.thumbnailUrl);
-      if (d.bannerUrl) setBannerUrl(d.bannerUrl);
+      if (d.tags) setTags(d.tags);
       if (d.gradientFrom) setGradientFrom(d.gradientFrom);
       if (d.gradientTo) setGradientTo(d.gradientTo);
+      if (d.thumbnailUrl) setThumbnailUrl(d.thumbnailUrl);
+      if (d.bannerUrl) setBannerUrl(d.bannerUrl);
+      if (d.previewUrl) setPreviewUrl(d.previewUrl);
+      // Legacy fields
+      if (d.tagsInput) setTagsInput(d.tagsInput);
       if (d.fileSize) setFileSize(d.fileSize);
       if (d.downloadLink) setDownloadLink(d.downloadLink);
-      // Note: clipsList is not restored because it contains file objects; user must re-upload clips
     } catch (e) { console.warn('Failed to restore draft', e); }
   }, []);
 
   // Warn before leaving if there is unsaved data
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (title || description || movieSource || clipsList.length > 0) {
+      if (title || description || animeSource || clipsList.length > 0) {
         e.preventDefault();
         e.returnValue = '';
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [title, description, movieSource, clipsList.length]);
+  }, [title, description, animeSource, clipsList.length]);
 
   // Preset thumbnails for easy clicking
   const THUMBNAIL_PRESETS = [
@@ -138,7 +153,7 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
     if (step > 1) setStep(prev => prev - 1);
   };
 
-  // Paste Text and split by lines to import clips in batch!
+  // Paste Text and split by lines to import clips in batch
   const handleBatchTextImport = () => {
     if (!clipInputText.trim()) return;
     const lines = clipInputText.split('\n').filter(line => line.trim() !== '');
@@ -165,6 +180,7 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
 
     setClipsList(prev => [...prev, ...newClips]);
     setClipInputText('');
+    setClipCount(clipsList.length + newClips.length);
   };
 
   // Local File Drag & Drop / Upload handler
@@ -188,18 +204,22 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
           
           const videoUrlBlob = URL.createObjectURL(file);
           
-          setClipsList(prev => [
-            ...prev,
-            {
-              name: file.name.replace(/\.[^/.]+$/, "").replace(/_/g, ' '),
-              duration: 15,
-              resolution: String(resolution),
-              has_raw: true,
-              has_graded: false,
-              sample_url: videoUrlBlob,
-              file_object: file
-            }
-          ]);
+          setClipsList(prev => {
+            const newList = [
+              ...prev,
+              {
+                name: file.name.replace(/\.[^/.]+$/, "").replace(/_/g, ' '),
+                duration: 15,
+                resolution: String(resolution),
+                has_raw: true,
+                has_graded: false,
+                sample_url: videoUrlBlob,
+                file_object: file
+              }
+            ];
+            setClipCount(newList.length);
+            return newList;
+          });
 
           setTimeout(() => {
             setUploadProgress(prev => {
@@ -217,29 +237,33 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
   };
 
   const handleRemoveClip = (index: number) => {
-    setClipsList(prev => prev.filter((_, i) => i !== index));
+    setClipsList(prev => {
+      const newList = prev.filter((_, i) => i !== index);
+      setClipCount(newList.length);
+      return newList;
+    });
   };
 
   // Submit and Save the full Scenepack to state
   const handlePublish = () => {
-    if (!title || !movieSource) return;
+    if (!title || !animeSource) return;
 
     const packId = `pack-${Date.now()}`;
-    const tags = tagsInput.split(',').map(t => t.trim()).filter(t => t !== '');
+    const tagsArray = tagsInput.split(',').map(t => t.trim()).filter(t => t !== '');
 
     const publishStatus: ScenePack['status'] = currentUser?.role === 'admin' ? 'published' : 'in_review';
 
     addPack({
       id: packId,
       title,
-      anime_source: movieSource,
+      anime_source: animeSource,
       genre,
       year: Number(year),
       resolution,
       fps: Number(fps),
       clip_count: clipsList.length,
       description,
-      tags,
+      tags: tagsArray,
       gradient_from: gradientFrom,
       gradient_to: gradientTo,
       thumbnail_url: thumbnailUrl,
@@ -341,8 +365,8 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
               <input
                 type="text"
                 placeholder="e.g. Mangatha (Tamil) or Jujutsu Kaisen"
-                value={movieSource}
-                onChange={(e) => setMovieSource(e.target.value)}
+                value={animeSource}
+                onChange={(e) => setAnimeSource(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-[#0a0a0c] text-xs text-white placeholder-zinc-600 rounded-xl border border-white/5 focus:border-red-500 outline-none transition"
               />
             </div>
@@ -658,7 +682,7 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
                         style={{ background: `linear-gradient(90deg, ${gradientFrom}, ${gradientTo})` }}
                       ></div>
                     </div>
-                    <span className="text-[8px] font-mono text-zinc-500 uppercase leading-none block">{movieSource || 'Source movie'}</span>
+                    <span className="text-[8px] font-mono text-zinc-500 uppercase leading-none block">{animeSource || 'Source movie'}</span>
                     <h5 className="font-bold text-xs text-white max-w-full truncate">{title || 'Scenepack Title Heading'}</h5>
                   </div>
                 </div>
@@ -826,7 +850,7 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono text-zinc-400 pt-3 border-t border-white/5 bg-[#0a0a0c]/20 p-4 rounded-xl">
             <span>PACK CONTAINER NAME: <strong className="text-white font-sans">{title}</strong></span>
-            <span>SOURCE MOVIE: <strong className="text-white font-sans">{movieSource}</strong></span>
+            <span>SOURCE MOVIE: <strong className="text-white font-sans">{animeSource}</strong></span>
             <span>GENRE CATEGORY: <strong className="text-amber-500 uppercase font-sans font-bold">{genre}</strong></span>
             <span>SPECIFICATIONS: <strong className="text-white font-sans">{resolution} @ {fps}FPS ({year})</strong></span>
             <span>TOTAL CLIPS COMMITTED: <strong className="text-white font-sans">{clipsList.length} extracts</strong></span>
@@ -862,7 +886,7 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
         {step < 4 ? (
           <button
             onClick={handleNext}
-            disabled={(step === 1 && (!title || !movieSource))}
+            disabled={(step === 1 && (!title || !animeSource))}
             className="px-5 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:pointer-events-none text-white rounded-xl text-xs font-bold leading-none flex items-center gap-1.5 transition select-none cursor-pointer active:scale-95"
           >
             <span>Next Step</span>
