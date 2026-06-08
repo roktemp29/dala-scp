@@ -236,56 +236,68 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
   };
 
   // Submit and Save the full Scenepack to state
-  const handlePublish = () => {
-    if (!title || !animeSource) return;
+  const [isPublishing, setIsPublishing] = useState(false);
 
-    const packId = `pack-${Date.now()}`;
-    const tagsArray = tagsInput.split(',').map(t => t.trim()).filter(t => t !== '');
+  const handlePublish = async () => {
+    if (!title || !animeSource || isPublishing) return;
+    setIsPublishing(true);
 
-    const publishStatus: ScenePack['status'] = currentUser?.role === 'admin' ? 'published' : 'in_review';
+    try {
+      const packId = `pack-${Date.now()}`;
+      const tagsArray = tagsInput.split(',').map(t => t.trim()).filter(t => t !== '');
+      const publishStatus: ScenePack['status'] = currentUser?.role === 'admin' ? 'published' : 'in_review';
 
-    addPack({
-      id: packId,
-      title,
-      anime_source: animeSource,
-      genre,
-      year: Number(year),
-      resolution,
-      fps: Number(fps),
-      clip_count: clipsList.length,
-      description,
-      tags: tagsArray,
-      gradient_from: gradientFrom,
-      gradient_to: gradientTo,
-      thumbnail_url: thumbnailUrl,
-      banner_url: bannerUrl,
-      preview_url: previewUrl || (clipsList[0]?.sample_url || 'https://www.youtube.com/watch?v=S0Tbyu61b3A'),
-      trailer_url: previewUrl || (clipsList[0]?.sample_url || 'https://www.youtube.com/watch?v=S0Tbyu61b3A'),
-      download_link: downloadLink || 'https://pixeldrain.com/u/fallback-link',
-      file_size: fileSize,
-      format: 'MP4',
-      status: publishStatus,
-      visibility: 'public',
-      uploader_name: currentUser?.full_name || 'Anonymous Creator',
-      uploader_email: currentUser?.email || 'guest@scenepack.com'
-    });
-
-    clipsList.forEach((c, idx) => {
-      addClip({
-        scenepack_id: packId,
-        name: c.name,
-        position: idx + 1,
-        duration: c.duration,
-        resolution: c.resolution,
-        has_raw: c.has_raw,
-        has_graded: c.has_graded,
-        sample_url: c.sample_url
+      // 1. Save the pack first and AWAIT it
+      await addPack({
+        id: packId,
+        title,
+        anime_source: animeSource,
+        genre,
+        year: Number(year),
+        resolution,
+        fps: Number(fps),
+        clip_count: clipsList.length,
+        description,
+        tags: tagsArray,
+        gradient_from: gradientFrom,
+        gradient_to: gradientTo,
+        thumbnail_url: thumbnailUrl,
+        banner_url: bannerUrl,
+        preview_url: previewUrl || (clipsList[0]?.sample_url || 'https://www.youtube.com/watch?v=S0Tbyu61b3A'),
+        trailer_url: previewUrl || (clipsList[0]?.sample_url || 'https://www.youtube.com/watch?v=S0Tbyu61b3A'),
+        download_link: downloadLink || 'https://pixeldrain.com/u/fallback-link',
+        file_size: fileSize,
+        format: 'MP4',
+        status: publishStatus,
+        visibility: 'public',
+        uploader_name: currentUser?.full_name || 'Anonymous Creator',
+        uploader_email: currentUser?.email || 'guest@scenepack.com'
       });
-    });
 
-    // Clear draft on successful publish
-    localStorage.removeItem('dala_upload_draft');
-    onSuccess(packId);
+      // 2. Save ALL clips sequentially and AWAIT each one
+      for (let idx = 0; idx < clipsList.length; idx++) {
+        const c = clipsList[idx];
+        await addClip({
+          scenepack_id: packId,
+          name: c.name,
+          position: idx + 1,
+          duration: c.duration,
+          resolution: c.resolution,
+          has_raw: c.has_raw,
+          has_graded: c.has_graded,
+          sample_url: c.sample_url
+        });
+      }
+
+      // 3. Only navigate AFTER everything is saved
+      localStorage.removeItem('dala_upload_draft');
+      onSuccess(packId);
+    } catch (err) {
+      console.error('Publish failed:', err);
+      alert('Failed to publish pack. Please try again.');
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   return (
@@ -865,10 +877,20 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
           <button
             onClick={handlePublish}
             id="wizard-complete-publish-btn"
-            className="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold leading-none flex items-center gap-1.5 transition select-none cursor-pointer active:scale-95 shadow-lg shadow-red-600/10"
+            disabled={isPublishing}
+            className="px-6 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-60 disabled:pointer-events-none text-white rounded-xl text-xs font-bold leading-none flex items-center gap-1.5 transition select-none cursor-pointer active:scale-95 shadow-lg shadow-red-600/10"
           >
-            <span>Complete & Request Publish</span>
-            <Sparkles className="w-4 h-4" />
+            {isPublishing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Saving to database...</span>
+              </>
+            ) : (
+              <>
+                <span>Complete & Request Publish</span>
+                <Sparkles className="w-4 h-4" />
+              </>
+            )}
           </button>
         )}
       </div>

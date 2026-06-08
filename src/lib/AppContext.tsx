@@ -13,9 +13,9 @@ interface AppContextType {
   playlists: Playlist[];
   loading: boolean;
   toggleSavePack: (packId: string) => void;
-  addPack: (pack: Omit<ScenePack, 'download_count' | 'view_count' | 'save_count' | 'rating' | 'created_at'>) => void;
+  addPack: (pack: Omit<ScenePack, 'download_count' | 'view_count' | 'save_count' | 'rating' | 'created_at'>) => Promise<void>;
   deletePack: (packId: string) => void;
-  addClip: (clip: Omit<Clip, 'id'>) => void;
+  addClip: (clip: Omit<Clip, 'id'>) => Promise<void>;
   incrementViewCount: (packId: string) => void;
   incrementDownloadCount: (packId: string) => void;
   createPlaylist: (name: string, description: string, isPublic: boolean) => string;
@@ -199,8 +199,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `clip-${Date.now()}-${Math.floor(Math.random() * 1000)}`
     };
     const { error } = await supabase.from('clips').insert(newClip);
-    if (!error) setClips(prev => [...prev, newClip]);
-    else console.error('Failed to add clip:', error);
+    if (!error) {
+      setClips(prev => [...prev, newClip]);
+    } else {
+      console.error('Failed to add clip to Supabase:', error.message, error.details, error.hint);
+      throw new Error(`Clip insert failed: ${error.message}`);
+    }
   };
 
   const incrementViewCount = async (packId: string) => {
