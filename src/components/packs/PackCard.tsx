@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Eye, Download, Bookmark, Film, ListCollapse, Volume2, VolumeX } from 'lucide-react';
 import { ScenePack } from '../../types';
 import { useApp } from '../../lib/AppContext';
@@ -32,19 +32,22 @@ export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
 
   const youtubeId = getYoutubeId(pack.trailer_url || pack.preview_url);
 
+  // Check if preview is a direct video (supabase/mp4) not YouTube
+  const isDirectVideo = !youtubeId && !!(pack.trailer_url || pack.preview_url);
+
   useEffect(() => {
     if (!isHovered) {
       setShouldPlay(false);
-      setIsMuted(true); // reset mute on mouse leave
+      setIsMuted(true);
       return;
     }
     const timer = setTimeout(() => setShouldPlay(true), 150);
     return () => clearTimeout(timer);
   }, [isHovered]);
 
-  // Build iframe src based on mute state
+  // Build iframe src — key changes when isMuted changes to force reload
   const iframeSrc = youtubeId
-    ? `https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=${youtubeId}&playsinline=1&showinfo=0&rel=0&iv_load_policy=3&enablejsapi=1`
+    ? `https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&loop=1&playlist=${youtubeId}&playsinline=1&showinfo=0&rel=0&iv_load_policy=3`
     : '';
 
   return (
@@ -60,7 +63,7 @@ export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
       <div
         className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-500 pointer-events-none blur-3xl rounded-xl"
         style={{ background: `linear-gradient(135deg, ${gradFrom}, ${gradTo})` }}
-      ></div>
+      />
 
       {/* Main Image Aspect Container */}
       <div className="relative aspect-[3/4] w-full overflow-hidden bg-zinc-900 border-b border-white/5">
@@ -76,7 +79,6 @@ export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
         {shouldPlay && (
           <div className="absolute inset-0 bg-[#0A0A0A] z-20 animate-in fade-in duration-300 overflow-hidden">
             {youtubeId ? (
-              // Key changes when isMuted changes — forces iframe to reload with new mute param
               <iframe
                 key={`${youtubeId}-${isMuted}`}
                 src={iframeSrc}
@@ -85,16 +87,17 @@ export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
                 title={pack.title}
                 referrerPolicy="no-referrer"
               />
-            ) : (
+            ) : isDirectVideo ? (
               <video
-                src={pack.preview_url || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4'}
+                key={`video-${isMuted}`}
+                src={pack.trailer_url || pack.preview_url}
                 autoPlay
                 loop
                 muted={isMuted}
                 playsInline
                 className="absolute inset-0 w-full h-full object-cover z-20 pointer-events-none"
               />
-            )}
+            ) : null}
 
             {/* Mute Toggle Button */}
             <button
@@ -102,15 +105,22 @@ export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
                 e.stopPropagation();
                 setIsMuted(prev => !prev);
               }}
-              className="absolute bottom-2.5 left-2 z-40 p-1.5 rounded-lg bg-black/70 border border-white/20 text-white hover:bg-black/90 transition-all duration-200 pointer-events-auto"
+              className="absolute bottom-2.5 left-2 z-40 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/80 border border-white/20 text-white hover:bg-black/90 transition-all duration-200 pointer-events-auto"
             >
-              {isMuted
-                ? <VolumeX className="w-3.5 h-3.5" />
-                : <Volume2 className="w-3.5 h-3.5 text-green-400" />
-              }
+              {isMuted ? (
+                <>
+                  <VolumeX className="w-3 h-3" />
+                  <span className="text-[9px] font-bold uppercase tracking-wider">Tap for Audio</span>
+                </>
+              ) : (
+                <>
+                  <Volume2 className="w-3 h-3 text-green-400" />
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-green-400">Audio On</span>
+                </>
+              )}
             </button>
 
-            {/* Live stream pill */}
+            {/* Trailer pill */}
             <div className="absolute bottom-2.5 right-2 text-zinc-100 font-mono text-[8px] bg-red-600/90 font-black px-1.5 py-0.5 rounded tracking-widest uppercase z-30 pointer-events-none shadow-md shadow-black/40">
               TRAILER PREVIEW
             </div>
@@ -118,13 +128,13 @@ export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
         )}
 
         {/* Gradient Shadow Shroud */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
 
         {/* Brand Color Stripe */}
         <div
           className="absolute top-0 inset-x-0 h-1"
           style={{ background: `linear-gradient(90deg, ${gradFrom}, ${gradTo})` }}
-        ></div>
+        />
 
         {/* Floating Top Indicators */}
         <div className="absolute top-2.5 inset-x-2.5 flex items-center justify-between pointer-events-auto">
@@ -158,7 +168,7 @@ export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
           </div>
         </div>
 
-        {/* Quick Spec Badge */}
+        {/* View Pack Badge */}
         <div className="absolute top-[38%] left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col items-center gap-2 pointer-events-none">
           <span className="bg-red-600/90 text-white font-extrabold text-[10px] tracking-widest uppercase px-3 py-1 rounded-full shadow-lg scale-90 group-hover:scale-100 transition-transform duration-300">
             VIEW PACK

@@ -34,9 +34,9 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
   const [year, setYear] = useState(() => getDraft('year', 2024));
   const [resolution, setResolution] = useState<ScenePack['resolution']>(() => getDraft('resolution', '4K'));
   const [fps, setFps] = useState(() => getDraft('fps', 60));
-  const [clipCount, setClipCount] = useState(() => getDraft('clipCount', 0));          // added as requested
+  const [clipCount, setClipCount] = useState(() => getDraft('clipCount', 0));
   const [description, setDescription] = useState(() => getDraft('description', ''));
-  const [tags, setTags] = useState(() => getDraft('tags', []));                        // changed from tagsInput to array
+  const [tags, setTags] = useState(() => getDraft('tags', []));
   const [gradientFrom, setGradientFrom] = useState(() => getDraft('gradientFrom', '#1e3c72'));
   const [gradientTo, setGradientTo] = useState(() => getDraft('gradientTo', '#2a5298'));
   const [thumbnailUrl, setThumbnailUrl] = useState(() => getDraft('thumbnailUrl', 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=600'));
@@ -45,12 +45,13 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
 
   // Additional states that were not listed – kept as before
   const [downloadLink, setDownloadLink] = useState('');
-  const [tagsInput, setTagsInput] = useState('');      // kept for backward compatibility with UI
+  const [tagsInput, setTagsInput] = useState('');
   const [fileSize, setFileSize] = useState('1.2 GB');
 
-  // Step 3 Clip Segment States
+  // Step 3 Clip Segment States – extended with optional id
   const [clipInputText, setClipInputText] = useState('');
   const [clipsList, setClipsList] = useState<Array<{
+    id?: string;
     name: string;
     duration: number;
     resolution: string;
@@ -65,7 +66,7 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
   const [thumbnailUploading, setThumbnailUploading] = useState(false);
   const [bannerUploading, setBannerUploading] = useState(false);
 
-  // Auto-save draft to localStorage – now includes the new keys
+  // Auto-save draft to localStorage
   useEffect(() => {
     const draft = {
       title,
@@ -82,8 +83,7 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
       thumbnailUrl,
       bannerUrl,
       previewUrl,
-      // keep existing fields that are not in the lazy‑initialised list
-      movieSource: animeSource,   // for backward compatibility
+      movieSource: animeSource,
       tagsInput,
       fileSize,
       downloadLink,
@@ -91,7 +91,7 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
     localStorage.setItem('dala_upload_draft', JSON.stringify(draft));
   }, [title, animeSource, genre, year, resolution, fps, description, tags, gradientFrom, gradientTo, thumbnailUrl, bannerUrl, previewUrl, clipsList.length, tagsInput, fileSize, downloadLink]);
 
-  // Restore draft on mount – now only for fields that were not lazy‑initialised, but kept for safety
+  // Restore draft on mount
   useEffect(() => {
     const saved = localStorage.getItem('dala_upload_draft');
     if (!saved) return;
@@ -110,7 +110,6 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
       if (d.thumbnailUrl) setThumbnailUrl(d.thumbnailUrl);
       if (d.bannerUrl) setBannerUrl(d.bannerUrl);
       if (d.previewUrl) setPreviewUrl(d.previewUrl);
-      // Legacy fields
       if (d.tagsInput) setTagsInput(d.tagsInput);
       if (d.fileSize) setFileSize(d.fileSize);
       if (d.downloadLink) setDownloadLink(d.downloadLink);
@@ -128,14 +127,6 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [title, description, animeSource, clipsList.length]);
-
-  // Preset thumbnails for easy clicking
-  const THUMBNAIL_PRESETS = [
-    'https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=600',
-    'https://images.unsplash.com/photo-1598899134739-24c46f58b8c0?q=80&w=600',
-    'https://images.unsplash.com/photo-1542204172-e70528091b50?q=80&w=600',
-    'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?q=80&w=600'
-  ];
 
   const GRADIENT_PRESETS = [
     { from: '#800000', to: '#111111', name: 'Dark Ruby' },
@@ -183,57 +174,53 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
     setClipCount(clipsList.length + newClips.length);
   };
 
-  // Local File Drag & Drop / Upload handler
-  const handleLocalVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
+  // NEW: Upload files directly to Supabase storage
+  const handleLocalVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
     setIsUploading(true);
-    const filesArray = Array.from(files) as File[];
 
-    filesArray.forEach((file, index) => {
+    for (let index = 0; index < files.length; index++) {
+      const file = files[index];
+      if (file.size > 50 * 1024 * 1024) {
+        alert(`${file.name} is over 50MB — skipped`);
+        continue;
+      }
       const clipId = `file-${Date.now()}-${index}`;
-      setUploadProgress(prev => ({ ...prev, [clipId]: 0 }));
+      setUploadProgress(prev => ({ ...prev, [clipId]: 10 }));
 
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += Math.floor(Math.random() * 15) + 10;
-        if (progress >= 100) {
-          progress = 100;
-          clearInterval(interval);
-          
-          const videoUrlBlob = URL.createObjectURL(file);
-          
-          setClipsList(prev => {
-            const newList = [
-              ...prev,
-              {
-                name: file.name.replace(/\.[^/.]+$/, "").replace(/_/g, ' '),
-                duration: 15,
-                resolution: String(resolution),
-                has_raw: true,
-                has_graded: false,
-                sample_url: videoUrlBlob,
-                file_object: file
-              }
-            ];
-            setClipCount(newList.length);
-            return newList;
-          });
+      const ext = file.name.split('.').pop();
+      const path = `clips/${Date.now()}-${index}.${ext}`;
+      const { error } = await supabase.storage.from('clips').upload(path, file, { upsert: true });
 
-          setTimeout(() => {
-            setUploadProgress(prev => {
-              const cp = { ...prev };
-              delete cp[clipId];
-              return cp;
-            });
-            setIsUploading(false);
-          }, 1000);
-        } else {
-          setUploadProgress(prev => ({ ...prev, [clipId]: progress }));
+      if (error) {
+        alert(`Failed to upload ${file.name}: ${error.message}`);
+        setUploadProgress(prev => { const cp = { ...prev }; delete cp[clipId]; return cp; });
+        continue;
+      }
+
+      const { data } = supabase.storage.from('clips').getPublicUrl(path);
+      setUploadProgress(prev => ({ ...prev, [clipId]: 100 }));
+
+      setClipsList(prev => [
+        ...prev,
+        {
+          id: clipId,
+          name: file.name.replace(/\.[^/.]+$/, ''),
+          duration: 15,
+          resolution: resolution,
+          has_raw: true,
+          has_graded: false,
+          sample_url: data.publicUrl,
+          file_object: file
         }
-      }, 350);
-    });
+      ]);
+
+      setTimeout(() => {
+        setUploadProgress(prev => { const cp = { ...prev }; delete cp[clipId]; return cp; });
+      }, 1000);
+    }
+    setIsUploading(false);
   };
 
   const handleRemoveClip = (index: number) => {
@@ -534,22 +521,6 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
                     {thumbnailUploading ? '⏳ Uploading...' : '📁 Upload Thumbnail (JPG, PNG, WEBP · max 10MB)'}
                   </span>
                 </label>
-
-                {/* Preset Row */}
-                <div className="flex gap-2.5 mt-1">
-                  {THUMBNAIL_PRESETS.map((p) => (
-                    <img
-                      key={p}
-                      onClick={() => setThumbnailUrl(p)}
-                      src={p}
-                      alt="Preset"
-                      className={`w-10 h-14 rounded object-cover cursor-pointer border hover:border-white/20 transition ${
-                        thumbnailUrl === p ? 'border-red-500 ring-2 ring-red-500/20' : 'border-white/5'
-                      }`}
-                      referrerPolicy="no-referrer"
-                    />
-                  ))}
-                </div>
               </div>
 
               {/* Banner field with upload and preview */}
@@ -776,7 +747,7 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
               <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
                 {clipsList.map((clip, index) => (
                   <div 
-                    key={`${clip.name}-${index}`}
+                    key={clip.id || `${clip.name}-${index}`}
                     className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 bg-zinc-950 border border-white/5 rounded-xl text-xs gap-3"
                   >
                     <div className="flex items-center gap-3.5 text-left">

@@ -49,8 +49,9 @@ function BaseLayout() {
     );
   }
 
-  // Show login page if not signed in
+  // Show login page if not signed in – replace history to prevent back button loop
   if (!currentUser) {
+    window.history.replaceState(null, '', '/');
     return <LoginPage />;
   }
 

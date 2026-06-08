@@ -160,7 +160,11 @@ export const PackDetail: React.FC<PackDetailProps> = ({ packId, onBack, onStream
     );
   }
 
-  const associatedClips = clips.filter(c => c.scenepack_id === pack.id);
+  // FIX 3: Sort clips by position to ensure correct order
+  const associatedClips = clips
+    .filter(c => c.scenepack_id === pack.id)
+    .sort((a, b) => a.position - b.position);
+
   const isSaved = savedPacks.some(s => s.scenepack_id === pack.id && s.user_email === currentUser?.email);
 
   const gradFrom = pack.gradient_from || '#1F1F1F';

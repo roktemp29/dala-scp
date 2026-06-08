@@ -51,7 +51,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     // Listen for auth changes (login/logout)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Ignore TOKEN_REFRESHED events to prevent unnecessary reloads
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'TOKEN_REFRESHED') return;
+
       if (session?.user) {
         loadOrCreateProfile(session.user);
       } else {
