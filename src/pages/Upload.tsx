@@ -30,6 +30,8 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
   // Form Field States – now lazy‑initialised from localStorage draft
   const [title, setTitle] = useState(() => getDraft('title', ''));
   const [animeSource, setAnimeSource] = useState(() => getDraft('animeSource', ''));
+  const [sourceType, setSourceType] = useState<'Movie' | 'Web Series'>(() => getDraft('sourceType', 'Movie'));
+  const [language, setLanguage] = useState(() => getDraft('language', 'Tamil'));
   const [genre, setGenre] = useState<ScenePack['genre']>(() => getDraft('genre', 'Action'));
   const [year, setYear] = useState(() => getDraft('year', 2024));
   const [resolution, setResolution] = useState<ScenePack['resolution']>(() => getDraft('resolution', '4K'));
@@ -84,6 +86,8 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
       bannerUrl,
       previewUrl,
       movieSource: animeSource,
+      sourceType,
+      language,
       tagsInput,
       fileSize,
       downloadLink,
@@ -252,6 +256,8 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
         id: packId,
         title,
         anime_source: animeSource,
+        source_type: sourceType,
+        language,
         genre,
         year: Number(year),
         resolution,
@@ -364,18 +370,28 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
             </div>
 
             <div className="space-y-1.5 flex flex-col">
-              <label className="text-[10px] font-mono text-zinc-400 font-bold">SOURCE MOVIE / ANIME *</label>
-              <input
-                type="text"
-                placeholder="e.g. Mangatha (Tamil) or Jujutsu Kaisen"
-                value={animeSource}
-                onChange={(e) => setAnimeSource(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-[#0a0a0c] text-xs text-white placeholder-zinc-600 rounded-xl border border-white/5 focus:border-red-500 outline-none transition"
-              />
+              <label className="text-[10px] font-mono text-zinc-400 font-bold">SOURCE MOVIE / WEB SERIES *</label>
+              <div className="flex gap-2">
+                <select
+                  value={sourceType}
+                  onChange={(e) => setSourceType(e.target.value as 'Movie' | 'Web Series')}
+                  className="px-3 py-2.5 bg-[#0a0a0c] text-xs text-zinc-300 rounded-xl border border-white/5 focus:border-red-500 outline-none transition font-sans shrink-0"
+                >
+                  <option value="Movie">Movie</option>
+                  <option value="Web Series">Web Series</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="e.g. Vikram, Leo, Mirzapur S2..."
+                  value={animeSource}
+                  onChange={(e) => setAnimeSource(e.target.value)}
+                  className="flex-1 px-3.5 py-2.5 bg-[#0a0a0c] text-xs text-white placeholder-zinc-600 rounded-xl border border-white/5 focus:border-red-500 outline-none transition"
+                />
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] font-mono text-zinc-400 font-bold">GENRE TYPE</label>
               <select
@@ -404,12 +420,15 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
 
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] font-mono text-zinc-400 font-bold">FRAME RATE (FPS)</label>
-              <input
-                type="number"
+              <select
                 value={fps}
                 onChange={(e) => setFps(Number(e.target.value))}
-                className="w-full px-3.5 py-2.5 bg-[#0a0a0c] text-xs text-white rounded-xl border border-white/5 focus:border-red-500 outline-none transition"
-              />
+                className="w-full px-3.5 py-2.5 bg-[#0a0a0c] text-xs text-zinc-300 rounded-xl border border-white/5 focus:border-red-500 outline-none transition font-sans"
+              >
+                {[24, 25, 30, 48, 60, 120].map(f => (
+                  <option key={f} value={f}>{f} FPS</option>
+                ))}
+              </select>
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -420,6 +439,18 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
                 onChange={(e) => setYear(Number(e.target.value))}
                 className="w-full px-3.5 py-2.5 bg-[#0a0a0c] text-xs text-white rounded-xl border border-white/5 focus:border-red-500 outline-none transition"
               />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-mono text-zinc-400 font-bold">LANGUAGE</label>
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-[#0a0a0c] text-xs text-zinc-300 rounded-xl border border-white/5 focus:border-red-500 outline-none transition font-sans"
+              >
+                {['Tamil', 'Telugu', 'Hindi', 'Malayalam', 'Kannada', 'English'].map(l => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
             </div>
           </div>
 

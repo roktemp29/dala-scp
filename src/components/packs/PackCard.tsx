@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, Download, Bookmark, Film, ListCollapse, Volume2, VolumeX } from 'lucide-react';
+import { Eye, Download, Bookmark, Film, ListCollapse, Volume2, VolumeX, Heart } from 'lucide-react';
 import { ScenePack } from '../../types';
 import { useApp } from '../../lib/AppContext';
 
@@ -9,7 +9,8 @@ interface PackCardProps {
 }
 
 export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
-  const { savedPacks, toggleSavePack, currentUser } = useApp();
+  const { savedPacks, toggleSavePack, currentUser, toggleLikePack, likedPacks } = useApp();
+  const isLiked = likedPacks.includes(pack.id);
   const isSaved = savedPacks.some(s => s.scenepack_id === pack.id && s.user_email === currentUser?.email);
 
   const [isHovered, setIsHovered] = useState(false);
@@ -141,19 +142,34 @@ export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
           <span className="text-[10px] font-bold tracking-wider uppercase text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded border border-white/10">
             {pack.genre}
           </span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleSavePack(pack.id);
-            }}
-            className={`p-1.5 rounded-lg border backdrop-blur-md transition-all duration-300 ${
-              isSaved
-                ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/20 scale-105'
-                : 'bg-black/60 border-white/10 hover:border-white/25 text-zinc-400 hover:text-white hover:scale-105'
-            }`}
-          >
-            <Bookmark className="w-3.5 h-3.5" fill={isSaved ? "currentColor" : "none"} />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleLikePack(pack.id);
+              }}
+              className={`p-1.5 rounded-lg border backdrop-blur-md transition-all duration-300 ${
+                isLiked
+                  ? 'bg-pink-500 border-pink-500 text-white shadow-lg shadow-pink-500/20 scale-105'
+                  : 'bg-black/60 border-white/10 hover:border-white/25 text-zinc-400 hover:text-pink-400 hover:scale-105'
+              }`}
+            >
+              <Heart className="w-3.5 h-3.5" fill={isLiked ? "currentColor" : "none"} />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleSavePack(pack.id);
+              }}
+              className={`p-1.5 rounded-lg border backdrop-blur-md transition-all duration-300 ${
+                isSaved
+                  ? 'bg-red-500 border-red-500 text-white shadow-lg shadow-red-500/20 scale-105'
+                  : 'bg-black/60 border-white/10 hover:border-white/25 text-zinc-400 hover:text-white hover:scale-105'
+              }`}
+            >
+              <Bookmark className="w-3.5 h-3.5" fill={isSaved ? "currentColor" : "none"} />
+            </button>
+          </div>
         </div>
 
         {/* Bottom Hover Statistics */}
@@ -165,6 +181,10 @@ export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
           <div className="flex items-center gap-1.5 bg-black/65 backdrop-blur-sm px-2 py-1 rounded border border-white/5">
             <Download className="w-3 h-3 text-red-500" />
             <span>{pack.download_count}</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-black/65 backdrop-blur-sm px-2 py-1 rounded border border-white/5">
+            <Heart className="w-3 h-3 text-pink-400" fill="currentColor" />
+            <span>{pack.like_count || 0}</span>
           </div>
         </div>
 

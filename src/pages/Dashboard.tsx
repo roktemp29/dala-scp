@@ -1,8 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { 
-  Eye, Download, Bookmark, Sparkles, SlidersHorizontal, 
-  Tv, Film, ListCollapse, ArrowUpRight, ShieldCheck, Flame, 
-  HelpCircle, AlertCircle, TrendingUp 
+  Eye, Download, Bookmark, Film, AlertCircle, TrendingUp,
+  ShieldCheck, Trophy, Medal, Heart, Crown, Star
 } from 'lucide-react';
 import { useApp } from '../lib/AppContext';
 
@@ -65,16 +64,34 @@ export const Dashboard: React.FC = () => {
           <p className="text-zinc-400 text-xs md:text-sm">Review active streams, overall zip compilation counts, and clip-action maps in real-time.</p>
         </div>
 
-        <div className="flex bg-zinc-950 border border-white/5 p-3 rounded-xl gap-6 font-mono text-xs max-w-fit self-start md:self-auto">
-          <div>
-            <span className="text-[10px] text-zinc-500 uppercase block leading-none">Global Rank</span>
-            <span className="text-white font-extrabold text-sm block mt-1">#12 (Top AEP)</span>
-          </div>
-          <div className="border-l border-white/5 pl-6">
-            <span className="text-[10px] text-zinc-500 uppercase block leading-none">Curation Score</span>
-            <span className="text-emerald-500 font-extrabold text-sm block mt-1">98% A+</span>
-          </div>
-        </div>
+        {/* Real rank computed from all editors */}
+        {(() => {
+          const allEditors = Array.from(new Set(packs.filter(p => p.status === 'published').map(p => p.uploader_email)));
+          const editorStats = allEditors.map(email => ({
+            email,
+            total: packs.filter(p => p.uploader_email === email && p.status === 'published').reduce((s, p) => s + p.download_count + p.view_count + (p.like_count || 0), 0)
+          })).sort((a, b) => b.total - a.total);
+          const myRank = editorStats.findIndex(e => e.email === authorEmail) + 1;
+          const myTotal = editorStats.find(e => e.email === authorEmail)?.total || 0;
+          const score = myTotal > 0 ? Math.min(99, Math.round(50 + (myTotal / Math.max(editorStats[0]?.total || 1, 1)) * 49)) : 0;
+          const grade = score >= 90 ? 'A+' : score >= 75 ? 'A' : score >= 60 ? 'B+' : score >= 50 ? 'B' : 'C';
+          return (
+            <div className="flex bg-zinc-950 border border-white/5 p-3 rounded-xl gap-6 font-mono text-xs max-w-fit self-start md:self-auto">
+              <div>
+                <span className="text-[10px] text-zinc-500 uppercase block leading-none">Global Rank</span>
+                <span className="text-white font-extrabold text-sm block mt-1">
+                  {myRank > 0 ? `#${myRank} of ${editorStats.length}` : 'Unranked'}
+                </span>
+              </div>
+              <div className="border-l border-white/5 pl-6">
+                <span className="text-[10px] text-zinc-500 uppercase block leading-none">Curation Score</span>
+                <span className={`font-extrabold text-sm block mt-1 ${score >= 75 ? 'text-emerald-500' : score >= 50 ? 'text-amber-500' : 'text-zinc-400'}`}>
+                  {score}% {grade}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Grid Bento Cards: Summary metrics */}
@@ -178,46 +195,90 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Single-Size Card: Collection Leaderboards */}
+        {/* Right Panel: Global Editor Leaderboard */}
         <div className="p-5 bg-zinc-950/40 border border-white/5 rounded-2xl flex flex-col gap-4 text-left">
-          <div>
-            <h3 className="text-sm font-bold text-white leading-none">My Top Performing Packs</h3>
-            <p className="text-xs text-zinc-500 mt-1">Curation distribution ranked by active download compilation metrics.</p>
+          <div className="flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-amber-500" />
+            <div>
+              <h3 className="text-sm font-bold text-white leading-none">Top Editors Leaderboard</h3>
+              <p className="text-xs text-zinc-500 mt-0.5">Ranked by downloads + views + likes across all published packs.</p>
+            </div>
           </div>
 
-          <div className="space-y-2.5 flex-1 max-h-[250px] overflow-y-auto pr-1">
-            {authorPacks.length === 0 ? (
-              <div className="py-12 bg-[#0c0c0e]/20 border border-white/5 rounded-xl text-center text-zinc-500 flex flex-col items-center justify-center">
+          {(() => {
+            const publishedPacks = packs.filter(p => p.status === 'published');
+            const editorMap: Record<string, { name: string; downloads: number; views: number; likes: number; packs: number }> = {};
+            publishedPacks.forEach(p => {
+              if (!editorMap[p.uploader_email]) {
+                editorMap[p.uploader_email] = { name: p.uploader_name, downloads: 0, views: 0, likes: 0, packs: 0 };
+              }
+              editorMap[p.uploader_email].downloads += p.download_count;
+              editorMap[p.uploader_email].views += p.view_count;
+              editorMap[p.uploader_email].likes += p.like_count || 0;
+              editorMap[p.uploader_email].packs += 1;
+            });
+
+            const leaderboard = Object.entries(editorMap)
+              .map(([email, stats]) => ({ email, ...stats, score: stats.downloads + stats.views + stats.likes }))
+              .sort((a, b) => b.score - a.score)
+              .slice(0, 10);
+
+            const rankIcons = [
+              <Crown className="w-3.5 h-3.5 text-amber-400" />,
+              <Medal className="w-3.5 h-3.5 text-zinc-300" />,
+              <Medal className="w-3.5 h-3.5 text-amber-700" />
+            ];
+
+            if (leaderboard.length === 0) return (
+              <div className="py-10 bg-[#0c0c0e]/20 border border-white/5 rounded-xl text-center text-zinc-500 flex flex-col items-center justify-center">
                 <AlertCircle className="w-8 h-8 text-zinc-800 mb-1" />
-                <p className="text-[10px] font-mono">No uploads to grade leaderboard.</p>
+                <p className="text-[10px] font-mono">No published packs yet.</p>
               </div>
-            ) : (
-              authorPacks
-                .sort((a,b) => b.download_count - a.download_count)
-                .slice(0, 5)
-                .map((pack, idx) => (
-                  <div 
-                    key={pack.id}
-                    className="flex items-center justify-between p-3 bg-zinc-950 border border-white/5 rounded-xl"
-                  >
-                    <div className="flex items-center gap-3 w-3/4">
-                      <span className="text-xs font-mono font-bold text-zinc-600 bg-zinc-90 w-5 h-5 rounded flex items-center justify-center border border-white/5 shrink-0">
-                        0{idx + 1}
-                      </span>
-                      <div className="truncate">
-                        <span className="text-[8px] font-mono text-zinc-500 block leading-none">{pack.anime_source}</span>
-                        <span className="text-xs font-bold text-zinc-300 leading-tight block mt-1.5 truncate">{pack.title}</span>
+            );
+
+            return (
+              <div className="space-y-2 flex-1 max-h-[280px] overflow-y-auto pr-1">
+                {leaderboard.map((editor, idx) => {
+                  const isMe = editor.email === authorEmail;
+                  return (
+                    <div
+                      key={editor.email}
+                      className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+                        isMe
+                          ? 'bg-red-500/5 border-red-500/20 ring-1 ring-red-500/10'
+                          : 'bg-zinc-950 border-white/5'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                          {idx < 3 ? rankIcons[idx] : (
+                            <span className="text-[10px] font-mono font-bold text-zinc-600">#{idx + 1}</span>
+                          )}
+                        </div>
+                        <div className="truncate">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-xs font-bold truncate ${isMe ? 'text-red-400' : 'text-zinc-200'}`}>
+                              {editor.name}
+                            </span>
+                            {isMe && <span className="text-[8px] font-mono bg-red-500/20 text-red-400 px-1 rounded shrink-0">YOU</span>}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 text-[9px] font-mono text-zinc-500">
+                            <span>{editor.packs} packs</span>
+                            <span className="flex items-center gap-0.5"><Download className="w-2.5 h-2.5" />{editor.downloads}</span>
+                            <span className="flex items-center gap-0.5"><Heart className="w-2.5 h-2.5 text-pink-500" />{editor.likes}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 ml-2">
+                        <span className="text-[10px] font-mono font-bold text-amber-500">{editor.score.toLocaleString()}</span>
+                        <span className="text-[8px] font-mono text-zinc-600 block">pts</span>
                       </div>
                     </div>
-                    
-                    {/* download result bubble */}
-                    <span className="text-[10px] font-mono font-bold bg-[#140b08] border border-red-500/10 text-red-500 px-2 py-1 rounded">
-                      {pack.download_count} DL
-                    </span>
-                  </div>
-                ))
-            )}
-          </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
 
       </div>

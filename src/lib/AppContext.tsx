@@ -13,9 +13,9 @@ interface AppContextType {
   playlists: Playlist[];
   loading: boolean;
   toggleSavePack: (packId: string) => void;
-  addPack: (pack: Omit<ScenePack, 'download_count' | 'view_count' | 'save_count' | 'rating' | 'created_at'>) => Promise<void>;
+  addPack: (pack: Omit<ScenePack, 'download_count' | 'view_count' | 'save_count' | 'rating' | 'created_at'>) => void;
   deletePack: (packId: string) => void;
-  addClip: (clip: Omit<Clip, 'id'>) => Promise<void>;
+  addClip: (clip: Omit<Clip, 'id'>) => void;
   incrementViewCount: (packId: string) => void;
   incrementDownloadCount: (packId: string) => void;
   createPlaylist: (name: string, description: string, isPublic: boolean) => string;
@@ -38,6 +38,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [clips, setClips] = useState<Clip[]>([]);
   const [savedPacks, setSavedPacks] = useState<SavedPack[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [likedPacks, setLikedPacks] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('dala_liked_packs') || '[]'); } catch { return []; }
+  });
 
   // Track if we already loaded data to prevent reloads on tab switch
   const dataLoadedRef = useRef(false);
@@ -199,12 +202,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `clip-${Date.now()}-${Math.floor(Math.random() * 1000)}`
     };
     const { error } = await supabase.from('clips').insert(newClip);
-    if (!error) {
-      setClips(prev => [...prev, newClip]);
-    } else {
-      console.error('Failed to add clip to Supabase:', error.message, error.details, error.hint);
-      throw new Error(`Clip insert failed: ${error.message}`);
-    }
+    if (!error) setClips(prev => [...prev, newClip]);
+    else console.error('Failed to add clip:', error);
   };
 
   const incrementViewCount = async (packId: string) => {
@@ -234,6 +233,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     supabase.from('playlists').insert(newPlaylist);
     setPlaylists(prev => [...prev, newPlaylist]);
     return id;
+  };
+
+  const toggleLikePack = (packId: string) => {
+    const isLiked = likedPacks.includes(packId);
+    const newLiked = isLiked ? likedPacks.filter(id => id !== packId) : [...likedPacks, packId];
+    setLikedPacks(newLiked);
+    localStorage.setItem('dala_liked_packs', JSON.stringify(newLiked));
+    // Update the pack's like_count in Supabase
+    const pack = packs.find(p => p.id === packId);
+    if (pack) {
+      const newCount = isLiked ? Math.max(0, (pack.like_count || 0) - 1) : (pack.like_count || 0) + 1;
+      supabase.from('scene_packs').update({ like_count: newCount }).eq('id', packId);
+      setPacks(prev => prev.map(p => p.id === packId ? { ...p, like_count: newCount } : p));
+    }
   };
 
   const addPackToPlaylist = async (playlistId: string, packId: string) => {
@@ -283,7 +296,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       packs, setPacks,
       clips, setClips,
       savedPacks, playlists, loading,
-      toggleSavePack, addPack, deletePack, addClip,
+      toggleSavePack, toggleLikePack, likedPacks, addPack, deletePack, addClip,
       incrementViewCount, incrementDownloadCount,
       createPlaylist, addPackToPlaylist, removePackFromPlaylist,
       deletePlaylist, updatePackStatus, switchUserRole,

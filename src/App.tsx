@@ -16,8 +16,14 @@ import { supabase } from './lib/supabase';
 
 function BaseLayout() {
   const { currentUser, loading, signOut } = useApp();
+  // Parse initial pack ID from URL (handles shared links like /pack/pack-123)
+  const getInitialPackId = () => {
+    const match = window.location.pathname.match(/^\/pack\/(.+)$/);
+    return match ? match[1] : null;
+  };
+
   const [activeTab, setActiveTab] = useState<string>('home');
-  const [selectedPackId, setSelectedPackId] = useState<string | null>(null);
+  const [selectedPackId, setSelectedPackId] = useState<string | null>(getInitialPackId);
   const [streamingPackId, setStreamingPackId] = useState<string | null>(null);
   const [viewProfileEmail, setViewProfileEmail] = useState<string | null>(null);
   const [browseGenre, setBrowseGenre] = useState<string>('All');
@@ -64,6 +70,7 @@ function BaseLayout() {
 
   const handleOpenPack = (packId: string) => {
     setSelectedPackId(packId);
+    window.history.pushState(null, '', `/pack/${packId}`);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -91,7 +98,10 @@ function BaseLayout() {
         {selectedPackId ? (
           <PackDetail
             packId={selectedPackId}
-            onBack={() => setSelectedPackId(null)}
+            onBack={() => {
+              setSelectedPackId(null);
+              window.history.pushState(null, '', '/');
+            }}
             onStreamClick={(id) => setStreamingPackId(id)}
             onViewProfileEmail={handleOpenProfile}
           />

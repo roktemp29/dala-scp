@@ -25,6 +25,9 @@ export interface ScenePack {
   download_count: number;
   view_count: number;
   save_count: number;
+  like_count: number;
+  language: string;
+  source_type: 'Movie' | 'Web Series';
   rating: number;
   created_at: string;
 }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  Sparkles, Film, Bookmark, FolderHeart, Plus, Trash2, 
+  Sparkles, Film, Bookmark, Trash2, 
   Settings, ChevronRight, Eye, Download, Info, Check, AlertCircle, X
 } from 'lucide-react';
 import { useApp } from '../lib/AppContext';
@@ -14,16 +14,15 @@ interface ProfileProps {
 
 export const Profile: React.FC<ProfileProps> = ({ viewEmail, onPackClick }) => {
   const { 
-    currentUser, setCurrentUser, packs, savedPacks, playlists, 
-    createPlaylist, deletePlaylist, removePackFromPlaylist, deletePack,
+    currentUser, setCurrentUser, packs, savedPacks, deletePack,
   } = useApp();
 
   // Determine current profile scope
   const targetEmail = viewEmail || currentUser?.email || 'guest@scenepack.com';
   const isOwnProfile = targetEmail === currentUser?.email;
 
-  // Tabs: 'uploads', 'bookmarks', 'playlists'
-  const [activeSubTab, setActiveSubTab] = useState<'uploads' | 'bookmarks' | 'playlists'>('uploads');
+  // Tabs: 'uploads', 'bookmarks'
+  const [activeSubTab, setActiveSubTab] = useState<'uploads' | 'bookmarks'>('uploads');
 
   // Profile Customizer State
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
@@ -32,7 +31,6 @@ export const Profile: React.FC<ProfileProps> = ({ viewEmail, onPackClick }) => {
   const [profileAvatar, setProfileAvatar] = useState(currentUser?.avatar_url || '');
   const [avatarUploading, setAvatarUploading] = useState(false);
 
-  // Playlist popup creator state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPlayName, setNewPlayName] = useState('');
   const [newPlayDesc, setNewPlayDesc] = useState('');
@@ -51,8 +49,8 @@ export const Profile: React.FC<ProfileProps> = ({ viewEmail, onPackClick }) => {
   const userBookmarkedPacks = packs.filter(p => 
     savedPacks.some(s => s.scenepack_id === p.id && s.user_email === targetEmail)
   );
-  const userPlaylists = playlists.filter(pl => pl.owner_email === targetEmail);
 
+  // (playlist removed)
   const handleCreatePlaylistSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPlayName.trim()) return;
@@ -109,7 +107,7 @@ export const Profile: React.FC<ProfileProps> = ({ viewEmail, onPackClick }) => {
         {[
           { id: 'uploads', label: 'My Uploads', count: userPacks.length, icon: Film },
           { id: 'bookmarks', label: 'Saved Packs', count: userBookmarkedPacks.length, icon: Bookmark },
-          { id: 'playlists', label: 'Playlists', count: userPlaylists.length, icon: FolderHeart }
+
         ].map(t => {
           const Icon = t.icon;
           const isActive = activeSubTab === t.id;
@@ -214,104 +212,7 @@ export const Profile: React.FC<ProfileProps> = ({ viewEmail, onPackClick }) => {
         </div>
       )}
 
-      {/* Playlists Shelf Viewport */}
-      {activeSubTab === 'playlists' && (
-        <div className="space-y-5 animate-in fade-in duration-300 text-left">
-          
-          {/* Header Action Row */}
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest leading-none">CUSTOM FOLDER PACKS</span>
-            {isOwnProfile && (
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="px-4 py-2 bg-zinc-900 hover:bg-zinc-805 border border-white/10 text-white font-semibold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition"
-              >
-                <Plus className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                <span>Create Folder Playlist</span>
-              </button>
-            )}
-          </div>
 
-          {userPlaylists.length === 0 ? (
-            <div className="py-20 text-center bg-zinc-950/20 border border-white/5 rounded-2xl flex flex-col items-center justify-center">
-              <FolderHeart className="w-10 h-10 text-zinc-800 mb-2" />
-              <h4 className="text-white text-xs font-mono">No curated folder playlists</h4>
-              <p className="text-zinc-500 text-[10px] mt-1 max-w-xs">Group related movie extracts or specific editors into folder playlists to share them broadly.</p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {userPlaylists.map((pl) => {
-                // Get actual packs belonging to this playlist
-                const plPacks = packs.filter(p => pl.pack_ids.includes(p.id));
-                return (
-                  <div key={pl.id} className="p-5 bg-zinc-950/40 border border-white/5 rounded-2xl space-y-4">
-                    <div className="flex items-start justify-between text-left">
-                      <div className="space-y-1">
-                        <h4 className="text-base font-extrabold text-white flex items-center gap-1.5">
-                          {pl.name}
-                          <span className="text-[9px] font-mono font-medium text-zinc-500 bg-zinc-90 w-fit px-1.5 py-0.5 bg-zinc-900 border border-white/5 rounded">
-                            {pl.is_public ? 'PUBLIC FOLDER' : 'PRIVATE'}
-                          </span>
-                        </h4>
-                        <p className="text-zinc-400 text-xs leading-relaxed max-w-xl">{pl.description || 'No folder description description.'}</p>
-                      </div>
-
-                      {/* Delete option */}
-                      {isOwnProfile && (
-                        <button
-                          onClick={() => deletePlaylist(pl.id)}
-                          className="p-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-500 hover:text-red-500 border border-white/5 hover:border-red-500/10 rounded-xl transition cursor-pointer active:scale-90"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Pack grid inside playlist */}
-                    {plPacks.length === 0 ? (
-                      <div className="py-8 text-center bg-[#0a0a0c]/20 border border-dashed border-zinc-900 rounded-xl">
-                        <p className="text-[10px] font-mono text-zinc-500">No packs added yet. Open pack pages and click "Add to Playlist" to populate.</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 pt-2">
-                        {plPacks.map((p) => (
-                          <div key={`pl-pack-${p.id}`} className="relative group/pl-card">
-                            {/* Miniature vertical card strip */}
-                            <div 
-                              onClick={() => onPackClick(p.id)}
-                              className="bg-[#0b0b0e] border border-white/5 rounded-xl overflow-hidden aspect-[2/3] relative cursor-pointer group hover:scale-103 transition-transform"
-                            >
-                              <img src={p.thumbnail_url} className="w-full h-full object-cover" alt={p.title} referrerPolicy="no-referrer" />
-                              <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
-                              <div className="absolute bottom-2.5 left-2 text-left w-[85%]">
-                                <span className="text-[8px] font-mono text-red-500 block truncate">{p.anime_source}</span>
-                                <span className="text-[10px] font-bold text-white block truncate leading-none mt-0.5">{p.title}</span>
-                              </div>
-                            </div>
-
-                            {/* Click to remove item from playlist folder */}
-                            {isOwnProfile && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  removePackFromPlaylist(pl.id, p.id);
-                                }}
-                                className="absolute top-1.5 right-1.5 z-20 p-1.5 bg-black/80 hover:bg-red-600 rounded-lg text-zinc-400 hover:text-white transition scale-0 group-hover/pl-card:scale-100 shadow shadow-black"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Creation Modal popup inside Playlist drawers */}
       {showCreateModal && (
