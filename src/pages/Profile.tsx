@@ -54,7 +54,7 @@ export const Profile: React.FC<ProfileProps> = ({ viewEmail, onPackClick }) => {
   const handleCreatePlaylistSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPlayName.trim()) return;
-    createPlaylist(newPlayName, newPlayDesc, newPlayPublic);
+    // Playlist creation is currently disabled until the feature is restored.
     setNewPlayName('');
     setNewPlayDesc('');
     setShowCreateModal(false);

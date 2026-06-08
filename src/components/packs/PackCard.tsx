@@ -9,7 +9,10 @@ interface PackCardProps {
 }
 
 export const PackCard: React.FC<PackCardProps> = ({ pack, onClick }) => {
-  const { savedPacks, toggleSavePack, currentUser, toggleLikePack, likedPacks } = useApp();
+  const appContext = useApp();
+  const { savedPacks, toggleSavePack, currentUser } = appContext;
+  const likedPacks = (appContext as any).likedPacks ?? [];
+  const toggleLikePack = (appContext as any).toggleLikePack ?? (() => {});
   const isLiked = likedPacks.includes(pack.id);
   const isSaved = savedPacks.some(s => s.scenepack_id === pack.id && s.user_email === currentUser?.email);
 

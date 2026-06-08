@@ -13,6 +13,8 @@ interface AppContextType {
   playlists: Playlist[];
   loading: boolean;
   toggleSavePack: (packId: string) => void;
+  toggleLikePack: (packId: string) => void;
+  likedPacks: string[];
   addPack: (pack: Omit<ScenePack, 'download_count' | 'view_count' | 'save_count' | 'rating' | 'created_at'>) => void;
   deletePack: (packId: string) => void;
   addClip: (clip: Omit<Clip, 'id'>) => void;

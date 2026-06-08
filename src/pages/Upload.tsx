@@ -273,6 +273,7 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
         trailer_url: previewUrl || (clipsList[0]?.sample_url || 'https://www.youtube.com/watch?v=S0Tbyu61b3A'),
         download_link: downloadLink || 'https://pixeldrain.com/u/fallback-link',
         file_size: fileSize,
+        like_count: 0,
         format: 'MP4',
         status: publishStatus,
         visibility: 'public',
