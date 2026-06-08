@@ -32,6 +32,7 @@ export const PackDetail: React.FC<PackDetailProps> = ({ packId, onBack, onStream
   const [readMore, setReadMore] = useState(false);
   const [showPlaylistMenu, setShowPlaylistMenu] = useState(false);
   const [isPlayingMuted, setIsPlayingMuted] = useState(true);
+  const isMutedRef = useRef(true); // Ref to avoid stale closure in YT callbacks
 
   // YouTube Player Ref
   const ytPlayerRef = useRef<any>(null);
@@ -120,11 +121,16 @@ export const PackDetail: React.FC<PackDetailProps> = ({ packId, onBack, onStream
           events: {
             onReady: (event: any) => {
               event.target.playVideo();
-              if (isPlayingMuted) {
-                event.target.mute();
-              } else {
-                event.target.unmute();
-                event.target.setVolume(100);
+              // Always start muted (browser autoplay policy requirement)
+              event.target.mute();
+              event.target.setVolume(0);
+              isMutedRef.current = true;
+              setIsPlayingMuted(true);
+            },
+            onStateChange: (event: any) => {
+              // Ensure player keeps playing
+              if (event.data === window.YT?.PlayerState?.ENDED) {
+                event.target.playVideo();
               }
             }
           }
@@ -170,27 +176,43 @@ export const PackDetail: React.FC<PackDetailProps> = ({ packId, onBack, onStream
   const gradFrom = pack.gradient_from || '#1F1F1F';
   const gradTo = pack.gradient_to || '#111111';
 
-  // Toggle Mute without restarting stream!
+  // Toggle Mute without restarting stream
   const toggleMute = () => {
-    const targetState = !isPlayingMuted;
-    setIsPlayingMuted(targetState);
+    const newMuted = !isMutedRef.current;
+    isMutedRef.current = newMuted;
+    setIsPlayingMuted(newMuted);
 
-    // YouTube API toggle
-    if (ytPlayerRef.current && typeof ytPlayerRef.current.mute === 'function') {
-      if (targetState) {
-        ytPlayerRef.current.mute();
-      } else {
-        ytPlayerRef.current.unmute();
-        if (typeof ytPlayerRef.current.setVolume === 'function') {
-          ytPlayerRef.current.setVolume(100);
+    // YouTube API toggle — must check player is fully ready
+    const ytPlayer = ytPlayerRef.current;
+    if (ytPlayer) {
+      try {
+        if (newMuted) {
+          ytPlayer.mute();
+          ytPlayer.setVolume(0);
+        } else {
+          ytPlayer.unMute();   // YT API uses unMute() (capital M)
+          ytPlayer.setVolume(100);
+          // Also ensure it's playing
+          if (typeof ytPlayer.getPlayerState === 'function') {
+            const state = ytPlayer.getPlayerState();
+            // -1 = unstarted, 2 = paused, 5 = cued
+            if (state === -1 || state === 2 || state === 5) {
+              ytPlayer.playVideo();
+            }
+          }
         }
+      } catch (e) {
+        console.warn('YT mute toggle error:', e);
       }
     }
 
     // Native HTML5 video toggle
     const html5Video = document.getElementById('native-hero-video') as HTMLVideoElement;
     if (html5Video) {
-      html5Video.muted = targetState;
+      html5Video.muted = newMuted;
+      if (!newMuted) {
+        html5Video.volume = 1;
+      }
     }
   };
 

@@ -182,8 +182,12 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
 
     for (let index = 0; index < files.length; index++) {
       const file = files[index];
-      if (file.size > 50 * 1024 * 1024) {
-        alert(`${file.name} is over 50MB — skipped`);
+      if (clipsList.length >= 5) {
+        alert('Maximum 5 sample clips allowed.');
+        break;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        alert(`${file.name} is over 10MB — skipped. Each sample clip must be under 10MB.`);
         continue;
       }
       const clipId = `file-${Date.now()}-${index}`;
@@ -299,7 +303,7 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
         {[
           { num: 1, label: 'Pack Details', icon: Sliders },
           { num: 2, label: 'Branding Colors', icon: Palette },
-          { num: 3, label: 'Batch Clip Import', icon: UploadCloud },
+          { num: 3, label: 'Sample Clip Import', icon: UploadCloud },
           { num: 4, label: 'Confirm Publish', icon: CheckCircle2 }
         ].map(s => {
           const Icon = s.icon;
@@ -663,53 +667,47 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
         </div>
       )}
 
-      {/* STEP 3: Batch Clip Import with Auto-Upload! */}
+      {/* STEP 3: Sample Clip Input */}
       {step === 3 && (
         <div className="space-y-6 animate-in fade-in duration-300">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Input Options 1: Batch paste text names */}
-            <div className="p-4 border border-white/5 bg-[#0a0a0c]/40 rounded-2xl flex flex-col gap-3">
-              <div className="flex flex-col text-left">
-                <span className="text-xs font-bold text-zinc-200">Option A: Quick Batch Name pasting</span>
-                <span className="text-[10px] text-zinc-500 mt-1">Paste multiple names (one per line) to instantly generate multiple clips in order. Optionally add duration in parenthesis!</span>
-              </div>
 
-              <textarea
-                rows={6}
-                placeholder={"e.g.\nCinematic Fight Walk (14s)\nRolex Dialogue close-up (9s)\nDouble katana clash (15s)"}
-                value={clipInputText}
-                onChange={(e) => setClipInputText(e.target.value)}
-                className="w-full px-3 py-2 bg-zinc-950 text-xs text-zinc-300 rounded-lg border border-white/5 font-mono leading-relaxed resize-none focus:border-red-500 outline-none"
-              />
-
-              <button
-                onClick={handleBatchTextImport}
-                className="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-white font-semibold rounded-lg text-xs active:scale-95 transition cursor-pointer text-center flex items-center justify-center gap-1.5"
-              >
-                <Plus className="w-3.5 h-3.5 text-red-500" />
-                <span>Parse pasted lines</span>
-              </button>
-            </div>
-
-            {/* Input Option 2: Drag & Drop Auto-upload files! */}
-            <div className="p-4 border-2 border-dashed border-zinc-800 hover:border-red-500/30 bg-[#0a0a0c]/20 hover:bg-red-500/[0.01] rounded-2xl flex flex-col items-center justify-center text-center group cursor-pointer transition relative">
-              <input 
-                type="file" 
-                multiple 
-                accept="video/*"
-                onChange={handleLocalVideoUpload}
-                className="absolute inset-0 opacity-0 cursor-pointer z-10"
-              />
-              <FileVideo className="w-10 h-10 text-zinc-600 group-hover:text-red-500 group-hover:scale-105 transition mb-3" />
-              <h5 className="font-bold text-zinc-200 text-xs">Option B: Drag & Drop Real MP4 Files</h5>
-              <p className="text-[10px] text-zinc-500 mt-1 max-w-xs">
-                Select your pre-sliced video files to upload them. They convert to local browser blob streams playable in the streaming app inline players!
+          {/* Info Banner */}
+          <div className="flex items-start gap-3 bg-amber-500/5 border border-amber-500/10 p-4 rounded-xl">
+            <Lightbulb className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-sm font-bold text-white leading-none mb-1">Sample Clip Upload</h4>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Upload up to <strong className="text-amber-400">5 sample clips</strong> so viewers can preview the quality before downloading the full pack. Each clip must be <strong className="text-amber-400">under 10 MB</strong>. These clips are stored in Supabase and streamed inline in the player.
               </p>
-              <button className="mt-4 px-3 py-1.5 bg-zinc-950 border border-white/5 text-[10px] font-mono text-zinc-400 rounded-lg shadow pointer-events-none">
-                SELECT VIDEO FILES
-              </button>
             </div>
+          </div>
+
+          {/* Upload Drop Zone */}
+          <div className={`p-6 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center group cursor-pointer transition relative ${clipsList.length >= 5 ? 'border-zinc-800 opacity-50 pointer-events-none' : 'border-zinc-800 hover:border-red-500/30 bg-[#0a0a0c]/20 hover:bg-red-500/[0.01]'}`}>
+            <input
+              type="file"
+              multiple
+              accept="video/*"
+              onChange={handleLocalVideoUpload}
+              className="absolute inset-0 opacity-0 cursor-pointer z-10"
+              disabled={clipsList.length >= 5}
+            />
+            <FileVideo className="w-12 h-12 text-zinc-600 group-hover:text-red-500 group-hover:scale-105 transition mb-3" />
+            <h5 className="font-bold text-zinc-200 text-sm">Drag & Drop Sample MP4 Clips</h5>
+            <p className="text-[10px] text-zinc-500 mt-1 max-w-sm leading-relaxed">
+              Select your pre-sliced sample video files. They will be uploaded to Supabase storage and streamed inline in the player so viewers can preview before downloading.
+            </p>
+            <div className="flex items-center gap-3 mt-4">
+              <span className="px-3 py-1.5 bg-zinc-950 border border-white/5 text-[10px] font-mono text-zinc-400 rounded-lg pointer-events-none">
+                SELECT VIDEO FILES
+              </span>
+              <span className={`text-[10px] font-mono font-bold px-2.5 py-1.5 rounded-lg border ${clipsList.length >= 5 ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-zinc-500 bg-zinc-900 border-white/5'}`}>
+                {clipsList.length} / 5 CLIPS
+              </span>
+            </div>
+            {clipsList.length >= 5 && (
+              <p className="text-[10px] text-red-400 font-mono mt-3 font-bold">Maximum 5 sample clips reached.</p>
+            )}
           </div>
 
           {/* Simulated File upload progress meters */}
@@ -735,13 +733,13 @@ export const Upload: React.FC<UploadProps> = ({ onSuccess }) => {
           {/* Created Clips Database list */}
           <div className="space-y-3.5 text-left">
             <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest block">
-              CLIPS PREPARED FOR THE PACK CONTAINER ({clipsList.length} CLIPS)
+              SAMPLE CLIPS ({clipsList.length} / 5 UPLOADED)
             </span>
 
             {clipsList.length === 0 ? (
               <div className="py-12 bg-zinc-950/20 border border-white/5 rounded-2xl text-center text-zinc-500">
                 <FileSpreadsheet className="w-8 h-8 text-zinc-800 mx-auto mb-2" />
-                <p className="text-xs font-mono">No clip segments configured. Use Option A or Option B above to begin.</p>
+                <p className="text-xs font-mono">No sample clips uploaded yet. Drag &amp; drop or select MP4 files above to begin. (Max 5 clips, 10MB each)</p>
               </div>
             ) : (
               <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">

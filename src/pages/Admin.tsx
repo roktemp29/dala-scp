@@ -11,8 +11,7 @@ interface AdminProps {
 
 export const Admin: React.FC<AdminProps> = ({ onPackClick }) => {
   const { 
-    packs, clips, updatePackStatus, deletePack, currentUser,
-    clearDatabase, restoreInitialData 
+    packs, clips, updatePackStatus, deletePack, currentUser
   } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'in_review' | 'published' | 'draft'>('all');
@@ -96,40 +95,7 @@ export const Admin: React.FC<AdminProps> = ({ onPackClick }) => {
         </div>
       </div>
 
-      {/* Database Maintenance and Reset Controls (Elegant Dark Management Block) */}
-      <div className="bg-[#0f0f13] border border-white/5 p-5 rounded-2xl flex flex-col md:flex-row items-center justify-between text-left gap-4">
-        <div className="space-y-1">
-          <h3 className="text-white text-sm font-bold flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse"></span>
-            System Database Console & Memory Storage
-          </h3>
-          <p className="text-zinc-400 text-xs leading-relaxed max-w-xl">
-            Clean the entire local preview database (removes all registered scene packs and clips), or sync/reset standard datasets back to initial state.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2.5 w-full md:w-auto justify-end">
-          <button
-            onClick={() => {
-              if (window.confirm('Are you absolute sure you want to CLEAR the database? This deletes all custom and default scene packs and associated clips.')) {
-                clearDatabase();
-              }
-            }}
-            className="px-4 py-2 bg-red-950/40 hover:bg-red-800 text-red-400 hover:text-white transition-all text-xs font-mono font-black border border-red-500/10 hover:border-red-500/20 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-lg w-full sm:w-auto justify-center"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            CLEAR DATABASE (EMPTY)
-          </button>
-          
-          <button
-            onClick={() => {
-              restoreInitialData();
-            }}
-            className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-all text-xs font-mono font-bold border border-white/5 rounded-lg flex items-center gap-1.5 cursor-pointer w-full sm:w-auto justify-center"
-          >
-            RESTORE DEFAULT DATA
-          </button>
-        </div>
-      </div>
+
 
       {/* Audit control search bars */}
       <div className="flex flex-col md:flex-row gap-3.5 items-stretch md:items-center justify-between min-w-full">

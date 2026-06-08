@@ -16,7 +16,6 @@ export const Profile: React.FC<ProfileProps> = ({ viewEmail, onPackClick }) => {
   const { 
     currentUser, setCurrentUser, packs, savedPacks, playlists, 
     createPlaylist, deletePlaylist, removePackFromPlaylist, deletePack,
-    clearDatabase, restoreInitialData
   } = useApp();
 
   // Determine current profile scope
@@ -103,38 +102,7 @@ export const Profile: React.FC<ProfileProps> = ({ viewEmail, onPackClick }) => {
         </div>
       </div>
 
-      {/* Profile-level Database maintenance system block */}
-      {isOwnProfile && (
-        <div className="bg-[#0c0c0e]/95 border border-white/5 p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between text-left gap-3 select-none">
-          <div className="space-y-0.5">
-            <h4 className="text-xs font-bold text-white flex items-center gap-1.5 uppercase tracking-wider">
-              <Settings className="w-3.5 h-3.5 text-zinc-400 animate-spin-slow" />
-              Reset & Clean Memory Dashboard
-            </h4>
-            <p className="text-zinc-500 text-[10px] sm:text-xs">
-              Clear all uploaded and default scenepacks to simulate a complete fresh database, or restore initial entries.
-            </p>
-          </div>
-          <div className="flex gap-2 w-full sm:w-auto justify-end">
-            <button
-              onClick={() => {
-                if (window.confirm('Delete all uploaded scenepacks and clips? This clears out the database completely.')) {
-                  clearDatabase();
-                }
-              }}
-              className="px-3.5 py-1.5 bg-red-950/20 hover:bg-red-900/40 text-red-400 border border-red-500/10 hover:border-red-500/30 text-[10px] font-mono tracking-wider uppercase font-bold rounded-lg cursor-pointer transition"
-            >
-              Clear Database
-            </button>
-            <button
-              onClick={restoreInitialData}
-              className="px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-white/5 text-[10px] font-mono tracking-wider uppercase font-bold rounded-lg cursor-pointer transition"
-            >
-              Restore Defaults
-            </button>
-          </div>
-        </div>
-      )}
+
 
       {/* Profile Shelf Navigation Subtabs */}
       <div className="flex bg-zinc-950 p-1 bg-[#0a0a0c]/80 border border-white/5 rounded-xl w-full max-w-md">
