@@ -15,7 +15,7 @@ interface ClipListProps {
 export const ClipList: React.FC<ClipListProps> = ({ pack, clips }) => {
   const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]);
   const [activePreviewClip, setActivePreviewClip] = useState<Clip | null>(null);
-  const [isPreviewMuted, setIsPreviewMuted] = useState(false);
+  const [isPreviewMuted, setIsPreviewMuted] = useState(true); // Start muted — browsers require muted for autoplay
   const [isZipping, setIsZipping] = useState(false);
   const [zippingProgress, setZippingProgress] = useState('');
   const [zippingError, setZippingError] = useState('');
@@ -255,13 +255,16 @@ export const ClipList: React.FC<ClipListProps> = ({ pack, clips }) => {
             <div className="relative aspect-video bg-black flex items-center justify-center">
               {activePreviewClip.sample_url ? (
                 <video
+                  key={activePreviewClip.id}
                   src={activePreviewClip.sample_url}
                   autoPlay
                   controls
                   loop
                   muted={isPreviewMuted}
                   playsInline
+                  preload="auto"
                   className="w-full h-full object-contain"
+                  onError={(e) => console.error('Preview video error:', e.currentTarget.error)}
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center text-zinc-600">

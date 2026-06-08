@@ -38,11 +38,7 @@ export const Player: React.FC<PlayerProps> = ({ packId, onClose }) => {
     setIsPlaying(true);
     setCurrentTime(0);
     setDuration(0);
-    if (videoRef.current) {
-      videoRef.current.playbackRate = playbackRate;
-      videoRef.current.load();
-      videoRef.current.play().catch(() => {});
-    }
+    // Don't call .play() directly here — wait for onCanPlay event on the video element
   }, [activeClipIndex]);
 
   // Adjust playback speed rates
@@ -193,14 +189,26 @@ export const Player: React.FC<PlayerProps> = ({ packId, onClose }) => {
         <div className="w-full h-full flex items-center justify-center bg-transparent">
           {activeClip ? (
             <video
+              key={activeClip.id}
               ref={videoRef}
               src={activeClip.sample_url}
-              autoPlay={isPlaying}
               loop={loopCurrent}
               muted={isMuted}
+              playsInline
+              onCanPlay={() => {
+                if (videoRef.current) {
+                  videoRef.current.playbackRate = playbackRate;
+                  videoRef.current.play().catch((e) => console.warn('Play blocked:', e));
+                  setIsPlaying(true);
+                }
+              }}
               onEnded={handleVideoEnded}
               onTimeUpdate={handleTimeUpdate}
-              onLoadedMetadata={handleLoadedMetadata}
+              onLoadedMetadata={(e) => {
+                const v = e.currentTarget;
+                setDuration(v.duration);
+              }}
+              onError={(e) => console.error('Video error:', e.currentTarget.error)}
               className={`transition-all duration-300 ${getAspectClass()}`}
             />
           ) : (

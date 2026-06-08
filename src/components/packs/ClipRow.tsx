@@ -22,17 +22,27 @@ export const ClipRow: React.FC<ClipRowProps> = ({ clip, isSelected, onSelectTogg
 
   const handleInlineHoverEnter = () => {
     setInlinePlaying(true);
-    if (videoRef.current) {
-      videoRef.current.play().catch(() => {});
+    const v = videoRef.current;
+    if (!v) return;
+    // If already loaded enough, play immediately; otherwise wait for canplay
+    if (v.readyState >= 3) {
+      v.play().catch(() => {});
+    } else {
+      v.load();
+      const onCanPlay = () => {
+        v.play().catch(() => {});
+        v.removeEventListener('canplay', onCanPlay);
+      };
+      v.addEventListener('canplay', onCanPlay);
     }
   };
 
   const handleInlineHoverLeave = () => {
     setInlinePlaying(false);
-    if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.currentTime = 0;
-    }
+    const v = videoRef.current;
+    if (!v) return;
+    v.pause();
+    v.currentTime = 0;
   };
 
   const toggleMute = (e: React.MouseEvent) => {
@@ -92,6 +102,7 @@ export const ClipRow: React.FC<ClipRowProps> = ({ clip, isSelected, onSelectTogg
               muted={isMuted}
               loop
               playsInline
+              preload="metadata"
               className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
                 inlinePlaying ? 'opacity-100' : 'opacity-0'
               }`}
