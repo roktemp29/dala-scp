@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { ScenePack, Clip, SavedPack, Playlist, UserProfile } from '../types';
 import { supabase } from './supabase';
 
@@ -39,9 +39,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [savedPacks, setSavedPacks] = useState<SavedPack[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
 
-  // Listen to Supabase Auth state
+  // Track if we already loaded data to prevent reloads on tab switch
+  const dataLoadedRef = useRef(false);
+
   useEffect(() => {
-    // Get initial session
+    // Get initial session — only load once
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         loadOrCreateProfile(session.user);
@@ -50,14 +52,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
 
-    // Listen for auth changes (login/logout)
-    // Ignore TOKEN_REFRESHED events to prevent unnecessary reloads
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Ignore all events that are NOT actual login/logout
       if (event === 'TOKEN_REFRESHED') return;
+      if (event === 'INITIAL_SESSION') return;
+      if (event === 'USER_UPDATED') return;
 
-      if (session?.user) {
-        loadOrCreateProfile(session.user);
-      } else {
+      if (event === 'SIGNED_IN') {
+        // Only reload if we haven't loaded data yet
+        if (!dataLoadedRef.current && session?.user) {
+          loadOrCreateProfile(session.user);
+        }
+        return;
+      }
+
+      if (event === 'SIGNED_OUT') {
+        dataLoadedRef.current = false;
         setCurrentUser(null);
         setPacks([]);
         setClips([]);
@@ -71,7 +82,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const loadOrCreateProfile = async (authUser: any) => {
-    // Check if profile exists
     let { data: profile } = await supabase
       .from('user_profiles')
       .select('*')
@@ -79,7 +89,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .single();
 
     if (!profile) {
-      // Create profile for first time users
       const newProfile = {
         id: authUser.id,
         email: authUser.email,
@@ -104,8 +113,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
-    // Load all data
     await loadData(authUser.email, profile?.role || 'user');
+    dataLoadedRef.current = true;
   };
 
   const loadData = async (userEmail: string, role: string) => {
@@ -114,9 +123,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const [packsRes, clipsRes, savedRes, playlistsRes] = await Promise.all([
         supabase.from('scene_packs').select('*').order('created_at', { ascending: false }),
         supabase.from('clips').select('*').order('position', { ascending: true }),
-        // Only load THIS user's saved packs
         supabase.from('saved_packs').select('*').eq('user_email', userEmail),
-        // Only load THIS user's playlists
         supabase.from('playlists').select('*').eq('owner_email', userEmail).order('created_at', { ascending: false }),
       ]);
 
@@ -132,6 +139,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const signOut = async () => {
+    dataLoadedRef.current = false;
     await supabase.auth.signOut();
   };
 
